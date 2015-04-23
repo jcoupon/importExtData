@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-import hsc.coupon as coupon
+import hsc.importExtData as importExtData
 
-coupon.foo()
+importExtData.foo()
 
 #from hsc.coupon import FewerSourceDetectionTask
 #import emulateHscCoadd
