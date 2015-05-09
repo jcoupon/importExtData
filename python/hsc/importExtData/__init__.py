@@ -1,1 +1,2 @@
-from emulateHscCoadd import FewerSourceDetectionTask, foo
+from emulateHscCoadd import EmulateHscCoaddTask
+

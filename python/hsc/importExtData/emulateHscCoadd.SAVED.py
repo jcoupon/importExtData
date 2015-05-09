@@ -88,17 +88,9 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         """
         skyInfo = self.getSkyInfo(patchRef)
 
-
-     
         calExpRefList = self.selectExposures(patchRef, skyInfo, selectDataList=selectDataList)
 
 
-        print dir(calExpRefList[0])
-
-
-
-
-        exit(-1)
 
         if len(calExpRefList) == 0:
             self.log.warn("No exposures to coadd for patch %s" % patchRef.dataId)
