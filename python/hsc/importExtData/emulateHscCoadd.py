@@ -25,13 +25,10 @@ import lsst.pex.config as pexConfig
 from lsst.pipe.tasks.coaddBase import CoaddBaseTask
 from lsst.pipe.tasks.calibrate import CalibrateTask
 
-
 import lsst.daf.base as dafBase
 import lsst.afw.image as afwImage
 import lsst.meas.algorithms as measAlg
 import lsst.afw.table as afwTable
-
-
 
 __all__ = ["EmulateHscCoaddTask"]
 
@@ -56,6 +53,7 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
         doc = "Initial measurements used to feed PSF determination and aperture correction determination",
     )
  
+    # can we add filter info here, Without changing the policy files?
     #    filterPolicy = pexPolicy.Policy()
     #    filterPolicy.add("lambdaEff", 470.0)
     #    afwImage.Filter.define(afwImage.FilterProperty("g", filterPolicy))
@@ -71,22 +69,16 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         
         CoaddBaseTask.__init__(self, *args, **kwargs)
 
-
         schema = afwTable.SourceTable.makeMinimalSchema()
         self.schema = schema
         self.algMetadata = dafBase.PropertyList()
       
-
         self.makeSubtask("detection", schema=self.schema)
         self.makeSubtask("initialMeasurement", schema=self.schema, algMetadata=self.algMetadata)
-   
-
         self.makeSubtask("calibrate")
-   
 
        
     def run(self, patchRef, selectDataList=[]):
-
 
         # Import existing coadd 
         coadd    = patchRef.get(self.config.coaddName + "Coadd")
@@ -97,7 +89,6 @@ class EmulateHscCoaddTask(CoaddBaseTask):
             coadd.getMaskedImage().getVariance().writeFits('/Users/coupon/data/tmp/test_var.fits')
             coadd.getMaskedImage().getMask().writeFits(    '/Users/coupon/data/tmp/test_msk.fits')
       
-  
         # Create a new exposure from exported data
         # to do: check if input wcs and reference coadd have same wcs
         skyInfo  = self.getSkyInfo(patchRef)
@@ -114,7 +105,6 @@ class EmulateHscCoaddTask(CoaddBaseTask):
        
         # Start PSF measurement on coadd
         self.calibrate.installInitialPsf(exposure)
-
         idFactory = afwTable.IdFactory.makeSimple()     
         table    = afwTable.SourceTable.make(self.calibrate.schema, idFactory)
         table.setMetadata(self.calibrate.algMetadata)
@@ -122,32 +112,30 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         # detect sources
         detRet = self.detection.makeSourceCatalog(table, exposure)
         sources = detRet.sources
-     
+        
         self.initialMeasurement.measure(exposure, sources)
-
-        matches = None
-
 
         for i, s in enumerate(sources):
             print s.getIxx(), s.getIyy()
             if i == 10: break
     
+        psfRet  = self.calibrate.measurePsf.run(exposure, sources, expId=0, matches=None)
+        
+        cellSet = psfRet.cellSet
+        psf = psfRet.psf
 
         # Write exposure
         if False:
             exposure.writeFits(self.config.fileOutName)
 
 
-
         #exposure = afwImage.ExposureF("/Users/coupon/data/HSC/SSP/rerun/tutorial_3.6.1/deepCoadd/HSC-I/1/5,5.fits")
         #exposure = afwImage.ExposureF("/Users/coupon/data/HSC/SSP/rerun/tutorial_3.6.1/01116/HSC-I/corr/CORR-0019666-049.fits")
-
 
         #import lsst.afw.geom as afwGeom
         #exposure.setXY0(afwGeom.Point2D(0,0))
 
         #calib = self.calibrate.run(exposure)
-
 
         return
 
