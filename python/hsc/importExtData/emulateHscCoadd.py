@@ -30,6 +30,7 @@ import lsst.afw.image as afwImage
 import lsst.meas.algorithms as measAlg
 import lsst.afw.table as afwTable
 
+
 __all__ = ["EmulateHscCoaddTask"]
 
 class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
@@ -52,7 +53,8 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
         target = measAlg.SourceMeasurementTask,
         doc = "Initial measurements used to feed PSF determination and aperture correction determination",
     )
- 
+
+    
     # can we add filter info here, Without changing the policy files?
     #    filterPolicy = pexPolicy.Policy()
     #    filterPolicy.add("lambdaEff", 470.0)
@@ -76,7 +78,8 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         self.makeSubtask("detection", schema=self.schema)
         self.makeSubtask("initialMeasurement", schema=self.schema, algMetadata=self.algMetadata)
         self.makeSubtask("calibrate")
-
+        
+      
        
     def run(self, patchRef, selectDataList=[]):
 
@@ -103,6 +106,11 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         # Until we add CFHT filter info...
         exposure.setFilter(coadd.getFilter())
        
+
+        #print dir(self.calibrate.measurePsf.psfDeterminer)
+        #return
+
+        
         # Start PSF measurement on coadd
         self.calibrate.installInitialPsf(exposure)
         idFactory = afwTable.IdFactory.makeSimple()     
@@ -119,6 +127,11 @@ class EmulateHscCoaddTask(CoaddBaseTask):
             print s.getIxx(), s.getIyy()
             if i == 10: break
     
+
+
+
+        return
+
         psfRet  = self.calibrate.measurePsf.run(exposure, sources, expId=0, matches=None)
         
         cellSet = psfRet.cellSet
