@@ -31,6 +31,7 @@ import lsst.meas.algorithms as measAlg
 import lsst.afw.table as afwTable
 
 
+
 __all__ = ["EmulateHscCoaddTask"]
 
 class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
