@@ -31,7 +31,6 @@ import lsst.meas.algorithms as measAlg
 import lsst.afw.table as afwTable
 
 
-
 __all__ = ["EmulateHscCoaddTask"]
 
 class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
@@ -72,8 +71,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         
         CoaddBaseTask.__init__(self, *args, **kwargs)
 
-        schema = afwTable.SourceTable.makeMinimalSchema()
-        self.schema = schema
+        self.schema = afwTable.SourceTable.makeMinimalSchema()
         self.algMetadata = dafBase.PropertyList()
       
         self.makeSubtask("detection", schema=self.schema)
@@ -83,6 +81,35 @@ class EmulateHscCoaddTask(CoaddBaseTask):
       
        
     def run(self, patchRef, selectDataList=[]):
+
+        exposure = afwImage.ExposureF("/Users/coupon/data/HSC/SSP/rerun/tutorial_3.6.1/deepCoadd/HSC-I/1/5,5.fits")
+        #exposure = afwImage.ExposureF("/Users/coupon/data/HSC/SSP/rerun/tutorial_3.6.1/01116/HSC-I/corr/CORR-0019666-049.fits")
+
+        self.calibrate.installInitialPsf(exposure)
+        idFactory = afwTable.IdFactory.makeSimple()     
+        table    = afwTable.SourceTable.make(self.schema, idFactory)
+        table.setMetadata(self.algMetadata)
+        
+        # detect sources
+        detRet = self.detection.makeSourceCatalog(table, exposure)
+        sources = detRet.sources
+        
+        self.initialMeasurement.measure(exposure, sources)
+
+        for i, s in enumerate(sources):
+            print s.getIxx(), s.getIyy()
+            if i == 10: break
+    
+
+        return
+     
+
+
+        #print dir(self.schema)
+        #print self.schema.getNames()
+
+        #return 
+
 
         # Import existing coadd 
         coadd    = patchRef.get(self.config.coaddName + "Coadd")
@@ -115,8 +142,8 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         # Start PSF measurement on coadd
         self.calibrate.installInitialPsf(exposure)
         idFactory = afwTable.IdFactory.makeSimple()     
-        table    = afwTable.SourceTable.make(self.calibrate.schema, idFactory)
-        table.setMetadata(self.calibrate.algMetadata)
+        table    = afwTable.SourceTable.make(self.schema, idFactory)
+        table.setMetadata(self.algMetadata)
         
         # detect sources
         detRet = self.detection.makeSourceCatalog(table, exposure)
