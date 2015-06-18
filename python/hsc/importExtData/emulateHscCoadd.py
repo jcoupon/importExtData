@@ -111,6 +111,16 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
     #    afwImage.Filter.define(afwImage.FilterProperty("g", filterPolicy))
     # see http://hsca.ipmu.jp/doxygen/3.6.1/page_p_a_f.html
 
+
+    # afwImage.Filter.reset()
+    #    afwImage.FilterProperty.reset()
+
+    #    filterPolicy = pexPolicy.Policy()
+    #    filterPolicy.add("lambdaEff", 470.0)
+    #    afwImage.Filter.define(afwImage.FilterProperty("g", filterPolicy))
+            
+  
+
 class EmulateHscCoaddTask(CoaddBaseTask):
 
 
@@ -167,6 +177,15 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         # Until we add CFHT filter info...
         exposure.setFilter(coadd.getFilter())
 
+        # until we propagate flags from individual exposures
+        exposure.getInfo().setCoaddInputs(coadd.getInfo().getCoaddInputs())
+    
+        # dummy coadd inputs
+        #expSchema = afwTable.ExposureTable.makeMinimalSchema()
+        #coaddInputs = afwImage.CoaddInputs(expSchema, expSchema)
+        #exposure.getInfo().setCoaddInputs(coaddInputs)
+
+
         #exposure = afwImage.ExposureF("/Users/coupon/data/HSC/SSP/rerun/tutorial_3.6.1/deepCoadd/HSC-I/1/5,5.fits")
         #exposure = afwImage.ExposureF("/Users/coupon/data/HSC/SSP/rerun/tutorial_3.6.1/01116/HSC-I/corr/CORR-0019666-049.fits")
         
@@ -195,7 +214,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
 
         # Write exposure
-        if False:
+        if True:
             exposure.writeFits(self.config.fileOutName)
 
         return exposure
