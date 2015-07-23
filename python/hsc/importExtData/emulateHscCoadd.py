@@ -34,9 +34,7 @@ import lsst.afw.image as afwImage
 import lsst.meas.algorithms as measAlg
 import lsst.afw.table as afwTable
 
-
 __all__ = ["EmulateHscCoaddTask"]
-
 
 
 class InitialPsfConfig(pexConfig.Config):
@@ -74,7 +72,11 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
 
     fileOutName = pexConfig.Field("Name of output file", str, "exposure.fits")
 
+    mag0   = pexConfig.Field("Magnitude zero point", float, 27.0)
+
     magLim = pexConfig.Field("Magnitude faint limit for PSF measurement", float, 23.0)
+
+    filtName = pexConfig.Field("Filter name", str, None)
 
     initialPsf = pexConfig.ConfigField(dtype=InitialPsfConfig, doc=InitialPsfConfig.__doc__)
 
@@ -90,7 +92,6 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
 
     measurePsf   = pexConfig.ConfigurableField(target = MeasurePsfTask, doc = "")
 
-
     def setDefaults(self):
 
         pexConfig.Config.setDefaults(self)
@@ -98,49 +99,58 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
         self.detection.includeThresholdMultiplier = 10.0
         self.initialMeasurement.prefix = "initial."
         self.initialMeasurement.algorithms.names -= ["correctfluxes"]
-        initflags = [self.initialMeasurement.prefix+x
-                     for x in self.measurePsf.starSelector["catalog"].badStarPixelFlags]
-        self.measurePsf.starSelector["catalog"].badStarPixelFlags.extend(initflags)
-        
+
+
+        if False:
+            """
+            This is HSC config, but it seems that PSFex isn't working on coadds. deblend.nchild is also
+            returning an error
+
+            """
+            import os
+            self.initialMeasurement.load(os.path.join(os.environ['MEAS_EXTENSIONS_SHAPEHSM_DIR'], 'config', 'enable.py'))
+            self.initialMeasurement.algorithms["shape.hsm.regauss"].deblendNChild = "deblend.nchild"
+            self.initialMeasurement.slots.shape = "shape.hsm.moments"
+
+            try:
+                import lsst.meas.extensions.psfex.psfexPsfDeterminer
+                self.measurePsf.psfDeterminer["psfex"].spatialOrder = 2
+                self.measurePsf.psfDeterminer.name = "psfex"
+            except ImportError as e:
+                print "WARNING: Unable to use psfex: %s" % e
+                self.measurePsf.psfDeterminer.name = "pca"
+
+
+#        initflags = [self.initialMeasurement.prefix+x
+#                     for x in self.measurePsf.starSelector["catalog"].badStarPixelFlags]
+#        self.measurePsf.starSelector["catalog"].badStarPixelFlags.extend(initflags)
+
+
         # Crashes if > 0.0
+        # TODO: implement it
         self.measurePsf.reserveFraction = 0.0
 
-    # can we add filter info here, Without changing the policy files?
-    #    filterPolicy = pexPolicy.Policy()
-    #    filterPolicy.add("lambdaEff", 470.0)
-    #    afwImage.Filter.define(afwImage.FilterProperty("g", filterPolicy))
-    # see http://hsca.ipmu.jp/doxygen/3.6.1/page_p_a_f.html
-
-
-    # afwImage.Filter.reset()
-    #    afwImage.FilterProperty.reset()
-
-    #    filterPolicy = pexPolicy.Policy()
-    #    filterPolicy.add("lambdaEff", 470.0)
-    #    afwImage.Filter.define(afwImage.FilterProperty("g", filterPolicy))
-            
-  
-
 class EmulateHscCoaddTask(CoaddBaseTask):
-
 
     ConfigClass  = EmulateHscCoaddConfig
     _DefaultName = "emulateHscCoadd"
 
     def __init__(self, *args, **kwargs):
-        
+
         CoaddBaseTask.__init__(self, *args, **kwargs)
 
         self.schema = afwTable.SourceTable.makeMinimalSchema()
         self.algMetadata = dafBase.PropertyList()
-      
+
         self.makeSubtask("detection", schema=self.schema)
         self.makeSubtask("initialMeasurement", schema=self.schema, algMetadata=self.algMetadata)
-        #self.makeSubtask("calibrate")
         self.makeSubtask("measurePsf")
-        
-      
+
     def run(self, patchRef, selectDataList=[]):
+        """
+        Task to import external data and transform it into LSST exposure
+        object. The task also perfomrs PSF measurement
+        """
 
         # ---------------------------------------------- #
         # Import reference coadd and records wcs info
@@ -149,80 +159,122 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         coadd    = patchRef.get(self.config.coaddName + "Coadd")
         skyInfo  = self.getSkyInfo(patchRef)
 
+        #mask = afwImage.MaskU(skyInfo.bbox)
+        #mask.writeFits("mask.fits")
+        #return
+
         # ---------------------------------------------- #
-        # tests
+        # Create new exposure object and feed with input images
         # ---------------------------------------------- #
 
-        if True:
-    
-            fluxMag0 = coadd.getCalib().getFluxMag0()[0]
-    
-            starSelectorConfig = self.measurePsf.starSelector.ConfigClass()
-            starSelectorConfig.fluxLim = fluxMag0 * pow(10.0, -0.4*self.config.magLim)
-            self.measurePsf.starSelector.config = starSelectorConfig
+        fluxMag0 = pow(10.0, +0.4*self.config.mag0)
 
+        if False:
             imgInName, mskInName, varInName = self.writeTest(coadd, dirName="/Users/coupon/data/tmp")
+            fluxMag0 = coadd.getCalib().getFluxMag0()[0]
+        else:
+            imgInName, mskInName, varInName = self.config.imgInName, self.config.mskInName, self.config.varInName
 
-        # ---------------------------------------------- #
-        # Create new exposure and feed with input images
-        # ---------------------------------------------- #
 
         exposure = afwImage.ExposureF(skyInfo.bbox, skyInfo.wcs)
         maskedImage = afwImage.MaskedImageF(
-            afwImage.ImageF(imgInName), 
-            afwImage.MaskU( mskInName), 
+            afwImage.ImageF(imgInName),
+            afwImage.MaskU( mskInName),
             afwImage.ImageF(varInName))
         exposure.setMaskedImage(maskedImage)
 
-        # Until we add CFHT filter info...
-        exposure.setFilter(coadd.getFilter())
+        # set dummy coadd info
+        expSchema = afwTable.ExposureTable.makeMinimalSchema()
+        coaddInputs = afwImage.CoaddInputs(expSchema, expSchema)
+        exposure.getInfo().setCoaddInputs(coaddInputs)
 
-        # until we propagate flags from individual exposures
-        exposure.getInfo().setCoaddInputs(coadd.getInfo().getCoaddInputs())
-    
-        # dummy coadd inputs
-        #expSchema = afwTable.ExposureTable.makeMinimalSchema()
-        #coaddInputs = afwImage.CoaddInputs(expSchema, expSchema)
-        #exposure.getInfo().setCoaddInputs(coaddInputs)
+        # coaddInputs = coadd.getInfo().getCoaddInputs()
+        # exposure.getInfo().setCoaddInputs(coaddInputs)
+
+        # set filter
+        if self.config.filtName is None:
+            filt = coadd.getFilter()
+        else:
+            filt = afwImage.Filter(self.config.filtName)
+
+        exposure.setFilter(filt)
+
+        # set calib object
+        calib = afwImage.Calib()
+        calib.setFluxMag0(fluxMag0)
+        exposure.setCalib(calib)
+
+        # test coadd
+        # exposure = afwImage.ExposureF("/Users/coupon/data/HSC/SSP/rerun/tutorial_3.6.1/deepCoadd/HSC-I/1/5,5.fits")
+
+        # test single exposure
+        # exposure = afwImage.ExposureF("/Users/coupon/data/HSC/SSP/rerun/tutorial_3.6.1/01116/HSC-I/corr/CORR-0019666-049.fits")
 
 
-        #exposure = afwImage.ExposureF("/Users/coupon/data/HSC/SSP/rerun/tutorial_3.6.1/deepCoadd/HSC-I/1/5,5.fits")
-        #exposure = afwImage.ExposureF("/Users/coupon/data/HSC/SSP/rerun/tutorial_3.6.1/01116/HSC-I/corr/CORR-0019666-049.fits")
-        
         # ---------------------------------------------- #
-        # Start PSF measurement on coadd
+        # Do PSF measurement on coadd
         # ---------------------------------------------- #
+
+        #starSelectorConfig = self.measurePsf.starSelector.ConfigClass()
+        #starSelectorConfig.fluxLim = fluxMag0 * pow(10.0, -0.4*self.config.magLim)
+        #self.measurePsf.starSelector.config = starSelectorConfig
 
         self.installInitialPsf(exposure)
 
-        # prepare table        
-        idFactory = afwTable.IdFactory.makeSimple()     
-        table    = afwTable.SourceTable.make(self.schema, idFactory)
+        starSelectorName = "objectSize"
+        starSelectorClass  = measAlg.starSelectorRegistry.get(starSelectorName)
+        starSelectorConfig = starSelectorClass.ConfigClass()
+
+        starSelectorConfig.sourceFluxField = "initial.flux.psf"
+
+        starSelectorConfig.fluxMin = fluxMag0 * pow(10.0, -0.4*self.config.magLim)
+
+        self.measurePsf.starSelector = starSelectorClass(starSelectorConfig)
+
+        # prepare table
+        idFactory = afwTable.IdFactory.makeSimple()
+        table     = afwTable.SourceTable.make(self.schema, idFactory)
         table.setMetadata(self.algMetadata)
+
         # detect sources
         detRet = self.detection.makeSourceCatalog(table, exposure)
         sources = detRet.sources
+
         # measure moments
         self.initialMeasurement.measure(exposure, sources)
+
         # measure psf
         psfRet  = self.measurePsf.run(exposure, sources, expId=0, matches=None)
-        
+
         cellSet = psfRet.cellSet
         psf = psfRet.psf
 
+        #fwhm = self.config.initialPsf.fwhm / exposure.getWcs().pixelScale().asArcseconds()
+        #psf  = measAlg.DoubleGaussianPsf(15, 15, fwhm/(2*math.sqrt(2*math.log(2))))
+
+        display = True
+        if display:
+            measAlg.utils.showPsfMosaic(exposure, psf, frame=6)
+            #measAlg.utils.showPsfMosaic(coadd, coadd.getPsf(), frame=6)
+
+        # set PSF
         exposure.setPsf(psf)
 
+        # ---------------------------------------------- #
+        # Return exposure
+        # ---------------------------------------------- #
 
         # Write exposure
         if True:
             exposure.writeFits(self.config.fileOutName)
 
+
         return exposure
 
 
     def writeTest(self, coadd, dirName="."):
-        """ This method takes the input coadd 
-        and writes the images, mask and variance 
+        """ This method takes the input coadd
+        and writes the images, mask and variance
         independently in dirName
         """
 
@@ -234,7 +286,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         coadd.getMaskedImage().getImage().writeFits(   imgInName)
         coadd.getMaskedImage().getMask().writeFits(    mskInName)
         coadd.getMaskedImage().getVariance().writeFits(varInName)
-     
+
         return imgInName, mskInName, varInName
 
 
@@ -246,7 +298,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         @param[in,out] exposure Exposure to process; fake PSF will be installed here.
         """
         assert exposure, "No exposure provided"
-        
+
         wcs = exposure.getWcs()
         assert wcs, "No wcs in exposure"
 
@@ -266,26 +318,3 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         return None
     def _getMetadataName(self):
         return None
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
