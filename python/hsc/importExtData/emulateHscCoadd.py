@@ -109,7 +109,7 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
             """
             import os
             self.initialMeasurement.load(os.path.join(os.environ['MEAS_EXTENSIONS_SHAPEHSM_DIR'], 'config', 'enable.py'))
-            self.initialMeasurement.algorithms["shape.hsm.regauss"].deblendNChild = "deblend.nchild"
+            #self.initialMeasurement.algorithms["shape.hsm.regauss"].deblendNChild = "deblend.nchild"
             self.initialMeasurement.slots.shape = "shape.hsm.moments"
 
             try:
@@ -159,6 +159,10 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         coadd    = patchRef.get(self.config.coaddName + "Coadd")
         skyInfo  = self.getSkyInfo(patchRef)
 
+
+        #measAlg.utils.showPsfMosaic(coadd, coadd.getPsf(), frame=1)
+        #return
+
         #mask = afwImage.MaskU(skyInfo.bbox)
         #mask.writeFits("mask.fits")
         #return
@@ -174,6 +178,10 @@ class EmulateHscCoaddTask(CoaddBaseTask):
             fluxMag0 = coadd.getCalib().getFluxMag0()[0]
         else:
             imgInName, mskInName, varInName = self.config.imgInName, self.config.mskInName, self.config.varInName
+
+
+        # set everything but the image
+        imgInName, _ , _ = self.writeTest(coadd, dirName="/Users/coupon/data/tmp")
 
 
         exposure = afwImage.ExposureF(skyInfo.bbox, skyInfo.wcs)
@@ -215,6 +223,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         # Do PSF measurement on coadd
         # ---------------------------------------------- #
 
+
         #starSelectorConfig = self.measurePsf.starSelector.ConfigClass()
         #starSelectorConfig.fluxLim = fluxMag0 * pow(10.0, -0.4*self.config.magLim)
         #self.measurePsf.starSelector.config = starSelectorConfig
@@ -254,8 +263,8 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
         display = True
         if display:
-            measAlg.utils.showPsfMosaic(exposure, psf, frame=6)
-            #measAlg.utils.showPsfMosaic(coadd, coadd.getPsf(), frame=6)
+            measAlg.utils.showPsfMosaic(exposure, psf, frame=1)
+            #measAlg.utils.showPsfMosaic(coadd, coadd.getPsf(), frame=1)
 
         # set PSF
         exposure.setPsf(psf)

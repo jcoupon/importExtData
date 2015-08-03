@@ -5,7 +5,7 @@ import lsst.afw.image as afwImage
 
 
 class HscAndExtMapper(HscMapper):
-    """Provides abstract-physical mapping for HSC data"""
+    """Provides abstract-physical mapping for HSC + external data"""
 
     def __init__(self, **kwargs):
 
