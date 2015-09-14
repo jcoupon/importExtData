@@ -152,6 +152,20 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         object. The task also perfomrs PSF measurement
         """
 
+        if False:
+            # exposure = afwImage.ExposureF("/Users/coupon/data/HSC/SSP/rerun/tutorial_3.6.1/deepCoadd/HSC-I/1/5,5.fits")
+
+            #coadd = afwImage.ExposureF("/Volumes/dataTmp/HSC/SSP/rerun/tutorial_3.6.1/deepCoadd/HSC-I/1/5,5.fits")
+            coadd = afwImage.ExposureF("/Users/coupon/Desktop/5,5.fits")
+            measAlg.utils.showPsfMosaic(coadd, coadd.getPsf(), frame=1)
+
+
+            return
+
+
+
+
+
         # ---------------------------------------------- #
         # Import reference coadd and records wcs info
         # ---------------------------------------------- #
@@ -175,14 +189,10 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
         if False:
             imgInName, mskInName, varInName = self.writeTest(coadd, dirName="/Users/coupon/data/tmp")
+            #imgInName, _ , _ = self.writeTest(coadd, dirName="/Users/coupon/data/tmp")
             fluxMag0 = coadd.getCalib().getFluxMag0()[0]
         else:
             imgInName, mskInName, varInName = self.config.imgInName, self.config.mskInName, self.config.varInName
-
-
-        # set everything but the image
-        imgInName, _ , _ = self.writeTest(coadd, dirName="/Users/coupon/data/tmp")
-
 
         exposure = afwImage.ExposureF(skyInfo.bbox, skyInfo.wcs)
         maskedImage = afwImage.MaskedImageF(
@@ -261,7 +271,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         #fwhm = self.config.initialPsf.fwhm / exposure.getWcs().pixelScale().asArcseconds()
         #psf  = measAlg.DoubleGaussianPsf(15, 15, fwhm/(2*math.sqrt(2*math.log(2))))
 
-        display = True
+        display = False
         if display:
             measAlg.utils.showPsfMosaic(exposure, psf, frame=1)
             #measAlg.utils.showPsfMosaic(coadd, coadd.getPsf(), frame=1)
@@ -272,6 +282,19 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         # ---------------------------------------------- #
         # Return exposure
         # ---------------------------------------------- #
+
+        # DEBUGGING
+        if False:
+            image    = exposure.getMaskedImage().getImage().getArray()
+            imageTmp = image.copy()
+            image *= 0.0
+            image[1000:2000, 1000:2000] = imageTmp[1000:2000, 1000:2000]
+
+            image    = exposure.getMaskedImage().getMask().getArray()
+            imageTmp = image.copy()
+            image[:] = 1000
+            image[1000:2000, 1000:2000] = imageTmp[1000:2000, 1000:2000]
+
 
         # Write exposure
         if True:
