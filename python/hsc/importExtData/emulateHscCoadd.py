@@ -91,6 +91,7 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
 
     measurePsf   = pexConfig.ConfigurableField(target = MeasurePsfTask, doc = "")
 
+
     def setDefaults(self):
 
         pexConfig.Config.setDefaults(self)
