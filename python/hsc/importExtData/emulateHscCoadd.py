@@ -65,10 +65,11 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
     """Config for EmulateHscCoaddTask
     """
 
-
     imgInName = pexConfig.Field("Name of input image",          str, "im.fits")
     mskInName = pexConfig.Field("Name of input mask",           str, "msk.fits")
     varInName = pexConfig.Field("Name of input variance image", str, "var.fits")
+
+    mskInRef = pexConfig.Field("Use mask image from reference image", bool, False)
 
     fileOutName = pexConfig.Field("Name of output file", str, "exposure.fits")
 
@@ -154,17 +155,10 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
         if False:
             # exposure = afwImage.ExposureF("/Users/coupon/data/HSC/SSP/rerun/tutorial_3.6.1/deepCoadd/HSC-I/1/5,5.fits")
-
             #coadd = afwImage.ExposureF("/Volumes/dataTmp/HSC/SSP/rerun/tutorial_3.6.1/deepCoadd/HSC-I/1/5,5.fits")
             coadd = afwImage.ExposureF("/Users/coupon/Desktop/5,5.fits")
             measAlg.utils.showPsfMosaic(coadd, coadd.getPsf(), frame=1)
-
-
             return
-
-
-
-
 
         # ---------------------------------------------- #
         # Import reference coadd and records wcs info
@@ -172,7 +166,6 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
         coadd    = patchRef.get(self.config.coaddName + "Coadd")
         skyInfo  = self.getSkyInfo(patchRef)
-
 
         #measAlg.utils.showPsfMosaic(coadd, coadd.getPsf(), frame=1)
         #return
@@ -188,16 +181,23 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         fluxMag0 = pow(10.0, +0.4*self.config.mag0)
 
         if False:
+            # for tests
             imgInName, mskInName, varInName = self.writeTest(coadd, dirName="/Users/coupon/data/tmp")
             #imgInName, _ , _ = self.writeTest(coadd, dirName="/Users/coupon/data/tmp")
             fluxMag0 = coadd.getCalib().getFluxMag0()[0]
+            exit(-1)
         else:
             imgInName, mskInName, varInName = self.config.imgInName, self.config.mskInName, self.config.varInName
+            if self.config.mskInRef:
+                mskIn = coadd.getMaskedImage().getMask()
+            else:
+                mskIn = afwImage.MaskU( mskInName)
+
 
         exposure = afwImage.ExposureF(skyInfo.bbox, skyInfo.wcs)
         maskedImage = afwImage.MaskedImageF(
             afwImage.ImageF(imgInName),
-            afwImage.MaskU( mskInName),
+            mskIn,
             afwImage.ImageF(varInName))
         exposure.setMaskedImage(maskedImage)
 
