@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 #
-# LSST Data Management System
-# Copyright 2008, 2009, 2010, 2011, 2012 LSST Corporation.
+# Jean Coupon (jean.coupon@unige.ch)
 #
 # This product includes software developed by the
-# LSST Project (http://www.lsst.org/).
+# LSST Project (http://www.lsst.org/) and the HSC software team
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,7 +19,6 @@
 # the GNU General Public License along with this program.  If not,
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
-
 
 import math
 
