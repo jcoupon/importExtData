@@ -20,220 +20,257 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
-import math
+# TO DO: add lensing. See https://mail.google.com/mail/u/0/?ui=2&shva=1#search/hsm+regauss/152a00d692ca49d0
+# and variance
+
+
 import numpy as np
+import errno
+import os
 
-#from lsst.pipe.base import CmdLineTask, Struct, TaskRunner, ArgumentParser, ButlerInitializedTaskRunner
-from lsst.pex.config import Config, Field, ListField, ConfigurableField, RangeField, ConfigField
-from lsst.pipe.tasks.multiBand import MergeSourcesTask, MergeSourcesConfig, MergeSourcesRunner, _makeGetSchemaCatalogs, _makeMakeIdFactory, getShortFilterName
-
-from lsst.pipe.tasks.coaddBase import getSkyInfo
+from argparse import ArgumentError
 
 
+import lsst.pex.config     as pexConfig
+from lsst.pipe.tasks.coaddBase import CoaddBaseTask
 import lsst.afw.table as afwTable
-import lsst.afw.image as afwImage
-import lsst.meas.mosaic as measMosaic
-
-from   lsst.afw.geom     import Box2D
 
 
-__all__ = ["createMultiCat"]
+__all__ = ["CreateMultiCatTask"]
 
+class CreateMultiCatConfig(CoaddBaseTask.ConfigClass):
 
-class CreateMultiCatConfig(MergeSourcesConfig):
-    """Config for createMultiCatTask
-    """
+    filters   = pexConfig.Field("Name of filters to combine [default HSC-G^HSC-R^HSC-I^HSC-Z^HSC-Y]", str, "HSC-G^HSC-R^HSC-I^HSC-Z^HSC-Y")
+    dustCoefs = pexConfig.Field("Correction coefficient to compute dust correction [default 3.711^2.626^1.916^1.469^1.242]", str, "3.711^2.626^1.916^1.469^1.242")
+    aperId    = pexConfig.Field("Aperture id", int, 2)
 
-    filterRef = Field("Name of reference filter for size measurement (default: HSC-I)", str, "HSC-I")
+    fileOutName = pexConfig.Field("Name of output file", str, "")
+    dirOutName  = pexConfig.Field("Name of output directory (will write output files as dirOutName/FILTER/TRACT/PATCH/multiCat-FILTER-TRACT-PATCH.fits)", str, ".")
 
-    aperId    = Field("Aperture id", int, 2)
-
-
-    coaddName   = Field(dtype=str, default="deep", doc="Name of coadd")
-    fileOutName = Field("Name of output file", str, "multiCat.fits")
-
-    dustSgpFileName = Field("Name of output file", str, "/Users/coupon/data/SchlegelDust/SFD_dust_4096_sgp.fits")
-    dustNgpFileName = Field("Name of output file", str, "/Users/coupon/data/SchlegelDust/SFD_dust_4096_ngp.fits")
+    dustSgpFileName = pexConfig.Field("Name of output file", str, "/Users/coupon/data/SchlegelDust/SFD_dust_4096_sgp.fits")
+    dustNgpFileName = pexConfig.Field("Name of output file", str, "/Users/coupon/data/SchlegelDust/SFD_dust_4096_ngp.fits")
 
     def setDefaults(self):
-        Config.setDefaults(self)
+        pexConfig.Config.setDefaults(self)
 
-class CreateMultiCatTask(MergeSourcesTask):
+class CreateMultiCatTask(CoaddBaseTask):
+    """A Task to merge catalogs
+    """
 
-    #catName           = "forced_src"
-    catName           = "src"
-    ConfigClass       = CreateMultiCatConfig
-    RunnerClass       = MergeSourcesRunner
-    _DefaultName      = "createMultiCat"
-    inputDataset      = catName
-    getSchemaCatalogs = _makeGetSchemaCatalogs(catName)
+    _DefaultName = 'CreateMultiCat'
+    ConfigClass = CreateMultiCatConfig
 
-    def __init__(self, butler=None, schema=None, **kwargs):
+    class dustMap(object):
+        """Dust map info
+        """
+        def __init__(self):
+            pass
 
-        MergeSourcesTask.__init__(self, butler=butler, schema=schema, **kwargs)
-        self.schema = self.getInputSchema(butler=butler, schema=schema)
+    def __init__(self, schema=None, *args, **kwargs):
+        CoaddBaseTask.__init__(self,  *args, **kwargs)
 
-        # load dust map in South and North Galactic caps
-        self.dustSgpWcs      = afwImage.makeWcs(afwImage.readMetadata(self.config.dustSgpFileName))
-        self.dustSgpArray    = afwImage.ImageF(self.config.dustSgpFileName).getArray()
-        self.dustNgpWcs      = afwImage.makeWcs(afwImage.readMetadata(self.config.dustNgpFileName))
-        self.dustNgpArray    = afwImage.ImageF(self.config.dustNgpFileName).getArray()
+        if len(self.config.dustCoefs.split("^")) !=  len(self.config.filters.split("^")):
+                raise ArgumentError(None, "filters and dustCoefs must have the same number of elements")
 
-    def readCoadd(self, patchRef):
+        # ---------------------------------------------------------- #
+        # for Galactic extinction until https://hsc-jira.astro.princeton.edu/jira/browse/HSC-1350 is fixed
+        # ---------------------------------------------------------- #
+        from   astropy.io        import ascii,fits
+        import astropy.wcs       as wcs
+
+        sFile = fits.open(self.config.dustSgpFileName)
+        nFile = fits.open(self.config.dustNgpFileName)
+
+        self.dustMap.sMap  = sFile[0].data
+        self.dustMap.nMap  = nFile[0].data
+
+        self.dustMap.sWcs = wcs.WCS(sFile[0].header)
+        self.dustMap.nWcs = wcs.WCS(nFile[0].header)
+        # ---------------------------------------------------------- #
+        #
+        # ---------------------------------------------------------- #
+
+
+    def iround(self, x):
+        """iround(number) -> integer
+        Round a number to the nearest integer.
+        From https://www.daniweb.com/software-development/python/threads/299459/round-to-nearest-integer-
+        """
+        return int(round(x) - .5) + (x > 0)
+
+    def readCatalog(self, dataRef, filterName):
+        """Read input catalog
+
+        We read the input dataset provided by the 'inputDataset'
+        class variable.
+        """
+        dataRef.dataId["filter"] = filterName
+        catalog = dataRef.get("deepCoadd_forced_src", immediate=True)
+        self.log.info("Read %d sources for filter %s: %s" % (len(catalog), filterName, dataRef.dataId))
+        return filterName, catalog
+
+    def readCoadd(self, dataRef, filterName):
         """Read input coadd
         """
-        filterName = patchRef.dataId["filter"]
-        coadd      = patchRef.get(self.config.coaddName + "Coadd")
-        self.log.info("Read coadd for filter %s: %s" % (filterName, patchRef.dataId))
+        dataRef.dataId["filter"] = filterName
+        coadd      = dataRef.get("deepCoadd_calexp")
+        self.log.info("Read coadd for filter %s: %s" % (filterName, dataRef.dataId))
         return filterName, coadd
 
-    def readSkyInfo(self, patchRef):
-        """Read input coadd
-        """
-        filterName = patchRef.dataId["filter"]
-        skyInfo = getSkyInfo(coaddName=self.config.coaddName, patchRef=patchRef)
-        self.log.info("Read getSkyInfo for filter %s: %s" % (filterName, patchRef.dataId))
-        return filterName, skyInfo
+    def getDustCorrection(self, dustMap, ra, dec):
 
-    def isOutside(self, coord, xy, skyInfo):
-        """Returns True if inside patch AND tract
-        """
+        from astropy import units as u
+        from astropy.coordinates import SkyCoord
+        import astropy.wcs       as wcs
 
-        if (not coord == coord):
-            return 0
+        coord = SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='fk5')
 
-        # inner patch
-        innerFloatBBox = Box2D(skyInfo.patchInfo.getInnerBBox())
-        isPatchInner   = innerFloatBBox.contains(xy)
-
-        # inner tract
-        sourceInnerTractId = skyInfo.skyMap.findTract(coord).getId()
-        isTractInner       = sourceInnerTractId == skyInfo.tractInfo.getId()
-
-        if (isPatchInner) & (isTractInner):
-            return 0
+        if coord.galactic.b.degree > 0.0:
+            x, y = wcs.utils.skycoord_to_pixel(coord, dustMap.nWcs,  origin=0)
+            return float(dustMap.nMap[self.iround(y), self.iround(x)])
         else:
-            return 1
+            x, y = wcs.utils.skycoord_to_pixel(coord, dustMap.sWcs,  origin=0)
+            return float(dustMap.sMap[self.iround(y), self.iround(x)])
 
 
-    def run(self, patchRefList=[]):
-        """
-        Task to create multiband catalogues
-        """
+    def run(self, dataRef, selectDataList=[]):
 
-        catalogs = dict(self.readCatalog(patchRef) for patchRef in patchRefList)
-        coadds   = dict(self.readCoadd(patchRef)   for patchRef in patchRefList)
-        skyInfo  = dict(self.readSkyInfo(patchRef) for patchRef in patchRefList)
+        self.log.info("Processing %s" % (dataRef.dataId))
 
-        #print catalogs[self.config.filterRef].schema
-        #print catalogs[self.config.filterRef].schema.getOrderedNames()
+        filters   = self.config.filters.split("^")
+        dustCoefs = [float(c) for c in self.config.dustCoefs.split("^") ]
+        ref       = dataRef.get("deepCoadd_ref")
 
-        filters  = coadds.keys()
+        catalogs = dict(self.readCatalog(dataRef, f) for f in filters)
+        coadds   = dict(self.readCoadd(dataRef, f) for f in filters)
 
-        if self.config.filterRef in filters:
-            wcs         = coadds[self.config.filterRef].getWcs()
-            pixel_scale = wcs.pixelScale().asDegrees()*3600.0
-            skyInfo     = skyInfo[self.config.filterRef]
-            aperSize    = catalogs[self.config.filterRef].getMetadata().get("flux_aperture_radii")[self.config.aperId] * 2.0 * pixel_scale
-            self.log.info("Diameter of flux apertures: {0:f}\"".format(aperSize))
-
-        else:
-            raise ValueError("Reference filter \"{0:s}\" not found in filter list. Exiting...".format(self.filterRef))
+        # print ref.schema.getOrderedNames()
+        # print dir(ref.schema)
+        # print catalogs[filters[0]].schema.getOrderedNames()
+        #return
 
         fluxMag0 = {}
         for f in filters:
             fluxMag0[f] = coadds[f].getCalib().getFluxMag0()[0]
             self.log.info("Mag ZP for filter {0:s}: {1:f}".format(f, 2.5*np.log10(fluxMag0[f])))
 
+        wcs         = coadds[filters[0]].getWcs()
+        pixel_scale = wcs.pixelScale().asDegrees()*3600.0
+
+        # display which aperture diameter size will be used
+        aperSize    = catalogs[filters[0]].getMetadata().get("flux_aperture_radii")[self.config.aperId] * 2.0 * pixel_scale
+        self.log.info("Diameter of flux apertures: {0:f}\"".format(aperSize))
 
         # create new table table
         mergedSchema = afwTable.Schema()
-
-
 
         fields=[]
         # define table fields
         fields.append(mergedSchema.addField("id",               type="L", doc="Unique id"))
         fields.append(mergedSchema.addField("ra",               type="F", doc="ra [deg]"))
         fields.append(mergedSchema.addField("dec",              type="F", doc="dec [deg]"))
-        fields.append(mergedSchema.addField("eB_V",             type="F", doc="Galactic extinction [mag]"))
         fields.append(mergedSchema.addField("countInputs",      type="I", doc="Number of input single exposures for the reference filter"))
         fields.append(mergedSchema.addField("detRadius",        type="F", doc="Determinant radius for the object in the reference filter = sigma if gaussian [arcsec]"))
         fields.append(mergedSchema.addField("PSFDetRadius",     type="F", doc="Determinant radius for the PSF at the object position = sigma if gaussian [arcsec]"))
         fields.append(mergedSchema.addField("cmodel_fracDev",   type="F", doc="fraction of flux in de Vaucouleur component"))
-        fields.append(mergedSchema.addField("isOutside",        type="I", doc="1 if outside the inner tract or patch"))
-        fields.append(mergedSchema.addField("isOnTheEdge",      type="I", doc="1 if on the EDGE or NO_DATA area"))
-        fields.append(mergedSchema.addField("hasBadPhotometry", type="I", doc="1 if interpolated, saturated, suspect, or has CR at center"))
+        fields.append(mergedSchema.addField("blendedness",      type="F", doc="Ranges from 0 (unblended) to 1 (blended)"))
+        fields.append(mergedSchema.addField("EB_V",             type="F", doc="Milky Way dust E(B-V) [mag]"))
+        fields.append(mergedSchema.addField("extendedness",     type="F", doc="probability of being extended from PSF/cmodel flux difference"))
+
+        fields.append(mergedSchema.addField("isSky",            type="I", doc="1 if sky object"))
+        fields.append(mergedSchema.addField("isDuplicated",     type="I", doc="1 if outside the inner tract or patch"))
+        fields.append(mergedSchema.addField("isOffImage",       type="I", doc="1 if in NO_DATA area or on the CCD edge"))
+        fields.append(mergedSchema.addField("hasBadPhotometry", type="I", doc="1 if interpolated, saturated, suspect, has CR at center or near bright object"))
         fields.append(mergedSchema.addField("isParent",         type="I", doc="1 if parent of a deblended object"))
         fields.append(mergedSchema.addField("isClean",          type="I", doc="1 if none of other flags is set"))
-        fields.append(mergedSchema.addField("isExtended",       type="F", doc="1 if cmodel_flux > flux_psf"))
 
+        # photometry estimates
         photo = ["flux.aperture", "flux.kron", "flux.psf", "cmodel.flux"]
         for p in photo:
             for f in filters:
                 keyName = (p+"_"+f).replace(".", "_").replace("-", "_")
-                fields.append(mergedSchema.addField(keyName,        type="F", doc="{0:s} for filter {1:s}".format(p,f)))
+                if p == "flux.aperture":
+                    fields.append(mergedSchema.addField(keyName,        type="F", doc="{0:s} for filter {1:s} within {2:f}\" diameter aperture".format(p,f,aperSize)))
+                else:
+                    fields.append(mergedSchema.addField(keyName,        type="F", doc="{0:s} for filter {1:s}".format(p,f)))
                 fields.append(mergedSchema.addField(keyName+"_err", type="F", doc="{0:s} error for filter {1:s}".format(p,f)))
+            fields.append(mergedSchema.addField(p+"_flag".replace(".", "_"),   type="I", doc="Highest flag value among filters for {0:s}".format(p)))
 
-#                fields.append(mergedSchema.addField(p+"_"+f, type="F", doc="Aperture flux in {0:f}\" diam. apertures for filter {1:s}".format(aperSize,f)))
+        # dust corrections
+        for f in filters:
+            fields.append(mergedSchema.addField(("EB_V_corr_"+f).replace(".", "_").replace("-", "_"),   type="F", doc="Milky way dust flux correction for filter {0:s}".format(f)))
 
-        #print mergedSchema; return
+        # print mergedSchema.getOrderedNames()
+        # return
 
         # create table object
         merged = afwTable.BaseCatalog(mergedSchema)
 
-        N = len(catalogs[self.config.filterRef])
-
-        for i, ref in enumerate(catalogs[self.config.filterRef]):
-
-#       for i in range(8000, 9000):
-#       i = 8506
-#       if True:
-#            ref = catalogs[self.config.filterRef][i]
-
-#           if (i > 0) & (i % 1000 == 0):
-#               self.log.info("Processed {0:d} objects".format(i))
+        N = len(ref)
+        for i in range(N):
+        # for i in range(10000,10200):
 
             # create new record
             record = merged.addNew()
-            coord = ref.get('coord')
+            coord = ref[i].get('coord')
+
+            for p in photo:
+                flag = 0
+                for f in filters:
+                    if catalogs[f][i].get(p+".flags") > flag:
+                        flag = catalogs[f][i].get(p+".flags")
+                record.set(mergedSchema[p+"_flag".replace(".", "_")].asKey(), flag)
 
             # record if any of the filter is flagged as bad photometry
             for f in filters:
-                hasBadPhotometry = (catalogs[f][i].get('flags.pixel.interpolated.center')) | (catalogs[f][i].get('flags.pixel.saturated.center')) \
-                                  | (catalogs[f][i].get('flags.pixel.suspect.center'))      | (catalogs[f][i].get('flags.pixel.cr.center'))
+                hasBadPhotometry = (catalogs[f][i].get('flags.pixel.interpolated.center')) \
+                                |  (catalogs[f][i].get('flags.pixel.saturated.center')) \
+                                |  (catalogs[f][i].get('flags.pixel.suspect.center'))  \
+                                |  (catalogs[f][i].get('flags.pixel.cr.center')) \
+                                |  (catalogs[f][i].get('flags.pixel.bright.object.center'))
                 if hasBadPhotometry:
                     break
 
-            isOutside   = self.isOutside(coord, wcs.skyToPixel(coord), skyInfo)
-            isParent    = ref.get('deblend.nchild') != 0
-            isOnTheEdge = ref.get('flags.pixel.edge')
+            isSky        = ref[i].get('merge.footprint.sky')
+            isDuplicated = not ref[i].get('detect.is-primary')
+            isParent     = ref[i].get('deblend.nchild') != 0
+            isOffImage   = (ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge'))
 
-            isClean = (not hasBadPhotometry) & (not isOutside) & (not isParent) & (not isOnTheEdge)
+            isClean = (not hasBadPhotometry) & (not isSky) & (not isDuplicated) & (not isParent) & (not isOffImage)
 
-            #isExtended = (ref.get('classification.extendedness')) &
-            isExtended = (catalogs[f][i].get('flux.kron') > 0.8*catalogs[f][i].get('flux.psf')) | \
-                          (ref.get("shape.sdss").getDeterminantRadius() > 1.1*ref.get("shape.sdss.psf").getDeterminantRadius())
-            if not (isExtended == isExtended):
-                isExtended = 0
+            #isExtended = (ref[i].get('classification.extendedness'))
+            #isExtended = (catalogs[f][i].get('flux.kron') > 0.8*catalogs[f][i].get('flux.psf')) | \
+            #              (ref.get("shape.sdss").getDeterminantRadius() > 1.1*ref.get("shape.sdss.psf").getDeterminantRadius())
+            #if not (isExtended == isExtended):
+            #    isExtended = 0
 
             # record common info from reference filter
-            record.set(mergedSchema['id'].asKey(),               ref.get('id'))
+            record.set(mergedSchema['id'].asKey(),               ref[i].get('id'))
             record.set(mergedSchema['ra'].asKey(),               coord.toFk5().getRa().asDegrees())
             record.set(mergedSchema['dec'].asKey(),              coord.toFk5().getDec().asDegrees())
-            record.set(mergedSchema['countInputs'].asKey(),      ref.get('countInputs'))
-            record.set(mergedSchema['detRadius'].asKey(),        ref.get("shape.sdss").getDeterminantRadius()*pixel_scale)
-            record.set(mergedSchema['PSFDetRadius'].asKey(),     ref.get("shape.sdss.psf").getDeterminantRadius()*pixel_scale)
-            record.set(mergedSchema['cmodel_fracDev'].asKey(),   ref.get('cmodel.fracDev'))
-            record.set(mergedSchema['isOutside'].asKey(),        int(isOutside))
-            record.set(mergedSchema['isOnTheEdge'].asKey(),      int(isOnTheEdge))
+            record.set(mergedSchema['countInputs'].asKey(),      ref[i].get('countInputs'))
+            record.set(mergedSchema['detRadius'].asKey(),        ref[i].get("shape.sdss").getDeterminantRadius()*pixel_scale)
+            record.set(mergedSchema['PSFDetRadius'].asKey(),     ref[i].get("shape.sdss.psf").getDeterminantRadius()*pixel_scale)
+            record.set(mergedSchema['cmodel_fracDev'].asKey(),   ref[i].get('cmodel.fracDev'))
+            record.set(mergedSchema['blendedness'].asKey(),      ref[i].get('blendedness.abs.flux'))
+            record.set(mergedSchema['extendedness'].asKey(),     ref[i].get('classification.extendedness'))
+
+            record.set(mergedSchema['isSky'].asKey(),            int(isSky))
+            record.set(mergedSchema['isDuplicated'].asKey(),     int(isDuplicated))
+            record.set(mergedSchema['isOffImage'].asKey(),       int(isOffImage))
             record.set(mergedSchema['hasBadPhotometry'].asKey(), int(hasBadPhotometry))
             record.set(mergedSchema['isParent'].asKey(),         int(isParent))
             record.set(mergedSchema['isClean'].asKey(),          int(isClean))
-            record.set(mergedSchema['isExtended'].asKey(),       int(isExtended))
+            #record.set(mergedSchema['isExtended'].asKey(),       int(isExtended))
+
+            # dust correction
+            EB_V = self.getDustCorrection(self.dustMap, record.get(mergedSchema['ra'].asKey()), record.get(mergedSchema['dec'].asKey()))
+            record.set(mergedSchema['EB_V'].asKey(), EB_V)
 
             # flux in micro Jansky
-            for f in filters:
+            for f, dc in zip(filters, dustCoefs):
+
+                record.set(mergedSchema[("EB_V_corr_"+f).replace(".", "_").replace("-", "_")].asKey(), pow(10.0, +0.4* dc * EB_V))
                 for p in photo:
                     if p == "flux.aperture":
                         flux     = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p)[self.config.aperId] / fluxMag0[f]
@@ -246,30 +283,35 @@ class CreateMultiCatTask(MergeSourcesTask):
                     record.set(mergedSchema[keyName].asKey(),          flux)
                     record.set(mergedSchema[keyName+"_err"].asKey(),   flux_err)
 
-            # Galactic extinction (currently not implemented)
-            if False:
-                if coord.toGalactic().getB().asDegrees() < 0.0:
-                    x, y = self.dustSgpWcs.skyToPixel(coord)
-                    eB_V = self.dustSgpArray[y, x]
-                else:
-                    x, y = self.dustNgpWcs.skyToPixel(coord)
-                    eB_V = self.dustNgpArray[y, x]
-            else:
-                eB_V = 0.0
-            record.set(mergedSchema['eB_V'].asKey(),   eB_V)
-
-
-
+        # write catalog
         self.log.info("Writing {0:s}".format(self.config.fileOutName))
-        merged.writeFits(self.config.fileOutName)
+        if self.config.fileOutName == "":
+            fileOutName = "{0}/{1}/{2}/{3}/multiCat-{2}-{3}.fits".format(self.config.dirOutName,"merged",dataRef.dataId["tract"],dataRef.dataId["patch"])
+            self.mkdir_p(os.path.dirname(fileOutName))
+        else:
+            fileOutName = self.config.fileOutName
+        merged.writeFits(fileOutName)
 
         return
 
 
-    # Overload these if your task inherits from CmdLineTask
+    # Don't forget to overload these
     def _getConfigName(self):
         return None
     def _getEupsVersionsName(self):
         return None
     def _getMetadataName(self):
         return None
+
+
+    def mkdir_p(self, path):
+        try:
+            os.makedirs(path)
+        except OSError as exc:  # Python >2.5
+            if exc.errno == errno.EEXIST and os.path.isdir(path):
+                pass
+            else:
+                raise
+
+if __name__ == '__main__':
+    CreateMultiCatTask.parseAndRun()

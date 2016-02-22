@@ -163,7 +163,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         # Import reference coadd and records wcs info
         # ---------------------------------------------- #
 
-        coadd    = patchRef.get(self.config.coaddName + "Coadd")
+        coadd    = patchRef.get(self.config.coaddName + "Coadd_calexp")
         skyInfo  = self.getSkyInfo(patchRef)
 
         #measAlg.utils.showPsfMosaic(coadd, coadd.getPsf(), frame=1)
