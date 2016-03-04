@@ -152,6 +152,9 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         object. The task also perfomrs PSF measurement
         """
 
+        self.log.info("Processing %s" % (patchRef.dataId))
+
+
         if False:
             # exposure = afwImage.ExposureF("/Users/coupon/data/HSC/SSP/rerun/tutorial_3.6.1/deepCoadd/HSC-I/1/5,5.fits")
             #coadd = afwImage.ExposureF("/Volumes/dataTmp/HSC/SSP/rerun/tutorial_3.6.1/deepCoadd/HSC-I/1/5,5.fits")
