@@ -23,18 +23,16 @@
 # TO DO: add lensing. See https://mail.google.com/mail/u/0/?ui=2&shva=1#search/hsm+regauss/152a00d692ca49d0
 # and variance
 
-
 import numpy as np
 import errno
 import os
 
 from argparse import ArgumentError
 
-
 import lsst.pex.config     as pexConfig
 from lsst.pipe.tasks.coaddBase import CoaddBaseTask
 import lsst.afw.table as afwTable
-
+import lsst.afw.image as afwImage
 
 __all__ = ["CreateMultiCatTask"]
 
@@ -42,7 +40,7 @@ class CreateMultiCatConfig(CoaddBaseTask.ConfigClass):
 
     filters   = pexConfig.Field("Name of filters to combine [default HSC-G^HSC-R^HSC-I^HSC-Z^HSC-Y]", str, "HSC-G^HSC-R^HSC-I^HSC-Z^HSC-Y")
     dustCoefs = pexConfig.Field("Correction coefficient to compute dust correction [default 3.711^2.626^1.916^1.469^1.242]", str, "3.711^2.626^1.916^1.469^1.242")
-    aperId    = pexConfig.Field("Aperture id", int, 2)
+    aperId    = pexConfig.Field("Aperture id", str, "2,3")
 
     fileOutName = pexConfig.Field("Name of output file", str, "")
     dirOutName  = pexConfig.Field("Name of output directory (will write output files as dirOutName/FILTER/TRACT/PATCH/multiCat-FILTER-TRACT-PATCH.fits)", str, ".")
@@ -147,7 +145,7 @@ class CreateMultiCatTask(CoaddBaseTask):
         # print ref.schema.getOrderedNames()
         # print dir(ref.schema)
         # print catalogs[filters[0]].schema.getOrderedNames()
-        #return
+        # return
 
         fluxMag0 = {}
         for f in filters:
@@ -157,10 +155,13 @@ class CreateMultiCatTask(CoaddBaseTask):
         wcs         = coadds[filters[0]].getWcs()
         pixel_scale = wcs.pixelScale().asDegrees()*3600.0
 
-        # display which aperture diameter size will be used
-        aperSize    = catalogs[filters[0]].getMetadata().get("flux_aperture_radii")[self.config.aperId] * 2.0 * pixel_scale
-        self.log.info("Diameter of flux apertures: {0:f}\"".format(aperSize))
+        aperId = [int(a) for a in self.config.aperId.split(",")]
 
+        # display which aperture diameter size will be used
+        aperSize = []
+        for j, a in enumerate(aperId):
+            aperSize.append(catalogs[filters[0]].getMetadata().get("flux_aperture_radii")[a] * 2.0 * pixel_scale)
+            self.log.info("Diameter of flux apertures: {0:f}\"".format(aperSize[j]))
         # create new table table
         mergedSchema = afwTable.Schema()
 
@@ -183,37 +184,46 @@ class CreateMultiCatTask(CoaddBaseTask):
         fields.append(mergedSchema.addField("hasBadPhotometry", type="I", doc="1 if interpolated, saturated, suspect, has CR at center or near bright object"))
         fields.append(mergedSchema.addField("isParent",         type="I", doc="1 if parent of a deblended object"))
         fields.append(mergedSchema.addField("isClean",          type="I", doc="1 if none of other flags is set"))
+        fields.append(mergedSchema.addField("refFilter",        type="String", size=10, doc="Name of the filter used as reference"))
 
         # photometry estimates
         photo = ["flux.aperture", "flux.kron", "flux.psf", "cmodel.flux"]
         for p in photo:
             for f in filters:
-                keyName = (p+"_"+f).replace(".", "_").replace("-", "_")
                 if p == "flux.aperture":
-                    fields.append(mergedSchema.addField(keyName,        type="F", doc="{0:s} for filter {1:s} within {2:f}\" diameter aperture".format(p,f,aperSize)))
+                    for a in aperSize:
+                        keyName = (p+"_"+str(int(a))+"arcsec_"+f).replace(".", "_").replace("-", "_")
+                        fields.append(mergedSchema.addField(keyName,        type="F", doc="{0:s} for filter {1:s} within {2:f}\" diameter aperture".format(p,f,a)))
+                        fields.append(mergedSchema.addField(keyName+"_err", type="F", doc="{0:s} error for filter {1:s}".format(p,f)))
                 else:
+                    keyName = (p+"_"+f).replace(".", "_").replace("-", "_")
                     fields.append(mergedSchema.addField(keyName,        type="F", doc="{0:s} for filter {1:s}".format(p,f)))
-                fields.append(mergedSchema.addField(keyName+"_err", type="F", doc="{0:s} error for filter {1:s}".format(p,f)))
+                    fields.append(mergedSchema.addField(keyName+"_err", type="F", doc="{0:s} error for filter {1:s}".format(p,f)))
             fields.append(mergedSchema.addField(p+"_flag".replace(".", "_"),   type="I", doc="Highest flag value among filters for {0:s}".format(p)))
 
         # dust corrections
         for f in filters:
             fields.append(mergedSchema.addField(("EB_V_corr_"+f).replace(".", "_").replace("-", "_"),   type="F", doc="Milky way dust flux correction for filter {0:s}".format(f)))
 
-        # print mergedSchema.getOrderedNames()
-        # return
-
         # create table object
         merged = afwTable.BaseCatalog(mergedSchema)
 
         N = len(ref)
         for i in range(N):
-        # for i in range(10000,10200):
+        #for i in range(10000,10200):
 
             # create new record
             record = merged.addNew()
             coord = ref[i].get('coord')
 
+            # record the name of the filter used as reference
+            for f in filters:
+                name = afwImage.Filter(afwImage.Filter(f).getId()).getName()
+                if ref[i].get("merge.measurement."+name):
+                    record.set(mergedSchema["refFilter"].asKey(), f)
+                    break
+
+            # photometry measurement flags
             for p in photo:
                 flag = 0
                 for f in filters:
@@ -273,15 +283,18 @@ class CreateMultiCatTask(CoaddBaseTask):
                 record.set(mergedSchema[("EB_V_corr_"+f).replace(".", "_").replace("-", "_")].asKey(), pow(10.0, +0.4* dc * EB_V))
                 for p in photo:
                     if p == "flux.aperture":
-                        flux     = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p)[self.config.aperId] / fluxMag0[f]
-                        flux_err = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p+".err")[self.config.aperId] / fluxMag0[f]
+                        for a in aperId:
+                            flux     = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p)[a] / fluxMag0[f]
+                            flux_err = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p+".err")[a] / fluxMag0[f]
+                            keyName = (p+"_"+str(int(a))+"arcsec_"+f).replace(".", "_").replace("-", "_")
+                            record.set(mergedSchema[keyName].asKey(),          flux)
+                            record.set(mergedSchema[keyName+"_err"].asKey(),   flux_err)
                     else:
                         flux     = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p) / fluxMag0[f]
                         flux_err = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p+".err") / fluxMag0[f]
-
-                    keyName =  (p+"_"+f).replace(".", "_").replace("-", "_")
-                    record.set(mergedSchema[keyName].asKey(),          flux)
-                    record.set(mergedSchema[keyName+"_err"].asKey(),   flux_err)
+                        keyName =  (p+"_"+f).replace(".", "_").replace("-", "_")
+                        record.set(mergedSchema[keyName].asKey(),          flux)
+                        record.set(mergedSchema[keyName+"_err"].asKey(),   flux_err)
 
         # write catalog
         self.log.info("Writing {0:s}".format(self.config.fileOutName))
