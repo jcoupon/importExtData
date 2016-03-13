@@ -133,6 +133,23 @@ class CreateMultiCatTask(CoaddBaseTask):
 
     def run(self, dataRef, selectDataList=[]):
 
+
+
+        if self.config.fileOutName == "":
+            fileOutName = "{0}/{1}/{2}/{3}/multiCat-{2}-{3}.fits".format(self.config.dirOutName,"merged",dataRef.dataId["tract"],dataRef.dataId["patch"])
+            self.mkdir_p(os.path.dirname(fileOutName))
+        else:
+            fileOutName = self.config.fileOutName
+
+        if os.path.isfile(fileOutName):
+
+            self.log.info("File for  %s exists. Exiting..." % (dataRef.dataId))
+
+            return
+
+
+
+
         self.log.info("Processing %s" % (dataRef.dataId))
 
         filters   = self.config.filters.split("^")
@@ -298,11 +315,6 @@ class CreateMultiCatTask(CoaddBaseTask):
 
         # write catalog
         self.log.info("Writing {0:s}".format(self.config.fileOutName))
-        if self.config.fileOutName == "":
-            fileOutName = "{0}/{1}/{2}/{3}/multiCat-{2}-{3}.fits".format(self.config.dirOutName,"merged",dataRef.dataId["tract"],dataRef.dataId["patch"])
-            self.mkdir_p(os.path.dirname(fileOutName))
-        else:
-            fileOutName = self.config.fileOutName
         merged.writeFits(fileOutName)
 
         return
