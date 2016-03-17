@@ -59,6 +59,7 @@ class InitialPsfConfig(pexConfig.Config):
     )
 
 
+
 class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
     """Config for EmulateHscCoaddTask
     """
@@ -68,6 +69,8 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
     varInName = pexConfig.Field("Name of input variance image", str, "var.fits")
 
     mskInRef = pexConfig.Field("Use mask image from reference image", bool, False)
+    weight = pexConfig.Field("Set if variance file is weight", bool, False)
+
 
     fileOutName = pexConfig.Field("Name of output file", str, "exposure.fits")
 
@@ -195,7 +198,6 @@ class EmulateHscCoaddTask(CoaddBaseTask):
             else:
                 mskIn = afwImage.MaskU( mskInName)
 
-
         # ---------------------------------------------- #
         # record in mask where there's no data
         # ---------------------------------------------- #
@@ -207,10 +209,15 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
         varIn = afwImage.ImageF(varInName)
 
-        noDataIn        = varIn.getArray() == 0
+        if self.config.weight:
+            noDataIn = (varIn.getArray()[:] == float('inf')) | (varIn.getArray()[:] == -float('inf')) | (varIn.getArray()[:] == float('NaN'))
+            varIn.getArray()[:] = 1.0/varIn.getArray()[:]
+        else:
+            noDataIn = (varIn.getArray()[:] == 0) | (varIn.getArray()[:] == float('Nan'))
         noDataRefNotSet = mskIn.getArray()&(1<<noDataBit) != 0 # check if not already set in ref mask
 
         mskIn.getArray()[noDataIn & noDataRefNotSet ] += 2**noDataBit
+
 
         # ---------------------------------------------- #
         # create exposure
