@@ -210,7 +210,8 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         varIn = afwImage.ImageF(varInName)
 
         if self.config.weight:
-            noDataIn = (varIn.getArray()[:] == float('Inf')) | (varIn.getArray()[:] == -float('Inf')) | (varIn.getArray()[:] == float('NaN'))
+            #noDataIn = (varIn.getArray()[:] == float('Inf')) | (varIn.getArray()[:] == -float('Inf')) | (varIn.getArray()[:] == float('NaN'))
+            noDataIn = (varIn.getArray()[:] != varIn.getArray()[:]) | (varIn.getArray()[:] > 1.e99)
             varIn.getArray()[:] = 1.0/varIn.getArray()[:]
         else:
             noDataIn = (varIn.getArray()[:] == 0) | (varIn.getArray()[:] == float('Nan'))
