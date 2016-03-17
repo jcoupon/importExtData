@@ -196,11 +196,31 @@ class EmulateHscCoaddTask(CoaddBaseTask):
                 mskIn = afwImage.MaskU( mskInName)
 
 
+        # ---------------------------------------------- #
+        # record in mask where there's no data
+        # ---------------------------------------------- #
+
+        # first get bit value for NO_DATA
+        mask = coadd.getMaskedImage().getMask()
+        mask_labels = mask.getMaskPlaneDict()
+        noDataBit = mask_labels["NO_DATA"]
+
+        varIn = afwImage.ImageF(varInName)
+
+        noDataIn        = varIn.getArray() == 0
+        noDataRefNotSet = mskIn.getArray()&(1<<noDataBit) != 0 # check if not already set in ref mask
+
+        mskIn.getArray()[noDataIn & noDataRefNotSet ] += 2**noDataBit
+
+        # ---------------------------------------------- #
+        # create exposure
+        # ---------------------------------------------- #
+
         exposure = afwImage.ExposureF(skyInfo.bbox, skyInfo.wcs)
         maskedImage = afwImage.MaskedImageF(
             afwImage.ImageF(imgInName),
             mskIn,
-            afwImage.ImageF(varInName))
+            varIn)
         exposure.setMaskedImage(maskedImage)
 
         # set dummy coadd info
