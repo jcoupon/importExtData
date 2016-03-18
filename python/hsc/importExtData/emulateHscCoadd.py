@@ -217,7 +217,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
             varIn.getArray()[:] = 1.0/varIn.getArray()[:]
         else:
-            noDataIn = (varIn.getArray()[:] == 0) | (varIn.getArray()[:] == float('Nan'))
+            noDataIn = (varIn.getArray()[:] == 0) | (np.logical_not(np.isfinite(varIn.getArray()[:])))
         noDataRefNotSet = mskIn.getArray()[:]&(1<<noDataBit) == 0 # check if not already set in ref mask
 
         mskIn.getArray()[noDataIn & noDataRefNotSet ] += 2**noDataBit
