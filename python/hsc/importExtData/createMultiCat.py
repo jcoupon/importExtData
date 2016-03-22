@@ -314,7 +314,7 @@ class CreateMultiCatTask(CoaddBaseTask):
                         record.set(mergedSchema[keyName+"_err"].asKey(),   flux_err)
 
         # write catalog
-        self.log.info("Writing {0:s}".format(self.config.fileOutName))
+        self.log.info("Writing {0:s}".format(fileOutName))
         merged.writeFits(fileOutName)
 
         return
