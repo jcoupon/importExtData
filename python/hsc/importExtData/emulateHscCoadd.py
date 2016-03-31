@@ -21,6 +21,9 @@
 #
 
 import math
+import errno
+import os
+
 
 import lsst.pex.config as pexConfig
 from lsst.pipe.tasks.coaddBase import CoaddBaseTask
@@ -72,7 +75,10 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
     weight = pexConfig.Field("Set if variance file is weight", bool, False)
 
 
-    fileOutName = pexConfig.Field("Name of output file", str, "exposure.fits")
+    # fileOutName = pexConfig.Field("Name of output file", str, "exposure.fits")
+
+    fileOutName = pexConfig.Field("Name of output file", str, "")
+    dirOutName  = pexConfig.Field("Name of output directory (will write output files as dirOutName/FILTER/TRACT/PATCH.fits)", str, "")
 
     mag0   = pexConfig.Field("Magnitude zero point", float, 27.0)
 
@@ -218,9 +224,9 @@ class EmulateHscCoaddTask(CoaddBaseTask):
             varIn.getArray()[:] = 1.0/varIn.getArray()[:]
         else:
             noDataIn = (varIn.getArray()[:] == 0) | (np.logical_not(np.isfinite(varIn.getArray()[:])))
-        noDataRefNotSet = mskIn.getArray()[:]&(1<<noDataBit) == 0 # check if not already set in ref mask
+        nopatchRefNotSet = mskIn.getArray()[:]&(1<<noDataBit) == 0 # check if not already set in ref mask
 
-        mskIn.getArray()[noDataIn & noDataRefNotSet ] += 2**noDataBit
+        mskIn.getArray()[noDataIn & nopatchRefNotSet ] += 2**noDataBit
 
 
         # ---------------------------------------------- #
@@ -330,9 +336,21 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
 
         # Write exposure
-        if True:
-            exposure.writeFits(self.config.fileOutName)
+        if self.config.fileOutName == "":
+            if self.config.dirOutName == "" :
+                dirOutName = patchRef.getButler().mapper.root+"/"+self.config.coaddName+"Coadd"
+                self.log.info("WARNING: the output file will be written in {0:s}.".format(dirOutName))
+            else:
+                dirOutName = self.config.dirOutName
 
+            fileOutName = "{0}/{1}/{2}/{3}.fits".format(dirOutName,self.config.filtName,patchRef.dataId["tract"],patchRef.dataId["patch"])
+        else:
+            fileOutName = self.config.fileOutName
+
+        self.log.info("Writing {0:s}".format(fileOutName))
+
+        self.mkdir_p(os.path.dirname(fileOutName))
+        exposure.writeFits(fileOutName)
 
         return exposure
 
@@ -383,3 +401,14 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         return None
     def _getMetadataName(self):
         return None
+
+
+
+    def mkdir_p(self, path):
+        try:
+            os.makedirs(path)
+        except OSError as exc:  # Python >2.5
+            if exc.errno == errno.EEXIST and os.path.isdir(path):
+                pass
+            else:
+                raise

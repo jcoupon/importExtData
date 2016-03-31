@@ -20,8 +20,6 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
-# TO DO: add lensing. See https://mail.google.com/mail/u/0/?ui=2&shva=1#search/hsm+regauss/152a00d692ca49d0
-# and variance
 
 import numpy as np
 import errno
@@ -43,7 +41,7 @@ class CreateMultiCatConfig(CoaddBaseTask.ConfigClass):
     aperId    = pexConfig.Field("Aperture id", str, "2,3")
 
     fileOutName = pexConfig.Field("Name of output file", str, "")
-    dirOutName  = pexConfig.Field("Name of output directory (will write output files as dirOutName/FILTER/TRACT/PATCH/multiCat-FILTER-TRACT-PATCH.fits)", str, ".")
+    dirOutName  = pexConfig.Field("Name of output directory (will write output files as dirOutName/FILTER/TRACT/PATCH/multiCat-FILTER-TRACT-PATCH.fits)", str, "")
 
     dustSgpFileName = pexConfig.Field("Name of output file", str, "/Users/coupon/data/SchlegelDust/SFD_dust_4096_sgp.fits")
     dustNgpFileName = pexConfig.Field("Name of output file", str, "/Users/coupon/data/SchlegelDust/SFD_dust_4096_ngp.fits")
@@ -133,11 +131,13 @@ class CreateMultiCatTask(CoaddBaseTask):
 
     def run(self, dataRef, selectDataList=[]):
 
-
-
         if self.config.fileOutName == "":
-            fileOutName = "{0}/{1}/{2}/{3}/multiCat-{2}-{3}.fits".format(self.config.dirOutName,"merged",dataRef.dataId["tract"],dataRef.dataId["patch"])
-            self.mkdir_p(os.path.dirname(fileOutName))
+            if self.config.dirOutName == "" :
+                dirOutName = dataRef.getButler().mapper.root+"/"+self.config.coaddName+"Coadd-results"
+                self.log.info("WARNING: the output file will be written in {0:s}.".format(dirOutName))
+            else:
+                dirOutName = self.config.dirOutName
+            fileOutName = "{0}/{1}/{2}/{3}/multiCat-{2}-{3}.fits".format(dirOutName,"merged",dataRef.dataId["tract"],dataRef.dataId["patch"])
         else:
             fileOutName = self.config.fileOutName
 
@@ -146,9 +146,6 @@ class CreateMultiCatTask(CoaddBaseTask):
             self.log.info("File for  %s exists. Exiting..." % (dataRef.dataId))
 
             return
-
-
-
 
         self.log.info("Processing %s" % (dataRef.dataId))
 
