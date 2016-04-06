@@ -228,6 +228,9 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
         mskIn.getArray()[noDataIn & nopatchRefNotSet ] += 2**noDataBit
 
+        # add median variance of good pixles where it's 0
+        varMedian = np.median(varIn.getArray()[mskIn.getArray() == 0])
+        varIn.getArray()[noDataIn] = varMedian
 
         # ---------------------------------------------- #
         # create exposure
