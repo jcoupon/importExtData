@@ -192,9 +192,11 @@ class CreateMultiCatTask(CoaddBaseTask):
         fields.append(mergedSchema.addField("EB_V",             type="F", doc="Milky Way dust E(B-V) [mag]"))
         fields.append(mergedSchema.addField("extendedness",     type="F", doc="probability of being extended from PSF/cmodel flux difference"))
 
+        fields.append(mergedSchema.addField("hasBadCentroid",   type="I", doc="1 if has bad centroid (but not used in islean"))
+
         fields.append(mergedSchema.addField("isSky",            type="I", doc="1 if sky object"))
         fields.append(mergedSchema.addField("isDuplicated",     type="I", doc="1 if outside the inner tract or patch"))
-        fields.append(mergedSchema.addField("isOffImage",       type="I", doc="1 if in NO_DATA area or on the CCD edge"))
+        fields.append(mergedSchema.addField("isEdge",           type="I", doc="1 if offImage or in region masked EDGE or NO_DATA"))
         fields.append(mergedSchema.addField("hasBadPhotometry", type="I", doc="1 if interpolated, saturated, suspect, has CR at center or near bright object"))
         fields.append(mergedSchema.addField("isParent",         type="I", doc="1 if parent of a deblended object"))
         fields.append(mergedSchema.addField("isClean",          type="I", doc="1 if none of other flags is set"))
@@ -224,7 +226,8 @@ class CreateMultiCatTask(CoaddBaseTask):
 
         N = len(ref)
         for i in range(N):
-        #for i in range(10000,10200):
+        # for i in range(10000,10200):
+        # for i in range(1,100):
 
             # create new record
             record = merged.addNew()
@@ -251,16 +254,21 @@ class CreateMultiCatTask(CoaddBaseTask):
                                 |  (catalogs[f][i].get('flags.pixel.saturated.center')) \
                                 |  (catalogs[f][i].get('flags.pixel.suspect.center'))  \
                                 |  (catalogs[f][i].get('flags.pixel.cr.center')) \
+                                |  (catalogs[f][i].get('flags.pixel.bad')) \
                                 |  (catalogs[f][i].get('flags.pixel.bright.object.center'))
                 if hasBadPhotometry:
                     break
 
-            isSky        = ref[i].get('merge.footprint.sky')
-            isDuplicated = not ref[i].get('detect.is-primary')
-            isParent     = ref[i].get('deblend.nchild') != 0
-            isOffImage   = (ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge'))
+            isSky          = ref[i].get('merge.footprint.sky')
+            isDuplicated   = not ref[i].get('detect.is-primary')
+            isParent       = ref[i].get('deblend.nchild') != 0
+            isEdge     = (ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge'))
+            hasBadCentroid = ref[i].get('centroid_sdss_flags')
 
-            isClean = (not hasBadPhotometry) & (not isSky) & (not isDuplicated) & (not isParent) & (not isOffImage)
+
+            # print ref[i].get('flags.pixel.offimage')
+
+            isClean = (not hasBadPhotometry) & (not isSky) & (not isDuplicated) & (not isParent) & (not isEdge)
 
             #isExtended = (ref[i].get('classification.extendedness'))
             #isExtended = (catalogs[f][i].get('flux.kron') > 0.8*catalogs[f][i].get('flux.psf')) | \
@@ -279,9 +287,10 @@ class CreateMultiCatTask(CoaddBaseTask):
             record.set(mergedSchema['blendedness'].asKey(),      ref[i].get('blendedness.abs.flux'))
             record.set(mergedSchema['extendedness'].asKey(),     ref[i].get('classification.extendedness'))
 
+            record.set(mergedSchema['hasBadCentroid'].asKey(),   int(hasBadCentroid))
             record.set(mergedSchema['isSky'].asKey(),            int(isSky))
             record.set(mergedSchema['isDuplicated'].asKey(),     int(isDuplicated))
-            record.set(mergedSchema['isOffImage'].asKey(),       int(isOffImage))
+            record.set(mergedSchema['isEdge'].asKey(),       int(isEdge))
             record.set(mergedSchema['hasBadPhotometry'].asKey(), int(hasBadPhotometry))
             record.set(mergedSchema['isParent'].asKey(),         int(isParent))
             record.set(mergedSchema['isClean'].asKey(),          int(isClean))
