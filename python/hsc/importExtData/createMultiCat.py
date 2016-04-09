@@ -46,6 +46,8 @@ class CreateMultiCatConfig(CoaddBaseTask.ConfigClass):
     dustSgpFileName = pexConfig.Field("Name of output file", str, "/Users/coupon/data/SchlegelDust/SFD_dust_4096_sgp.fits")
     dustNgpFileName = pexConfig.Field("Name of output file", str, "/Users/coupon/data/SchlegelDust/SFD_dust_4096_ngp.fits")
 
+    clobber = pexConfig.Field("Replace output file", bool, False)
+
     def setDefaults(self):
         pexConfig.Config.setDefaults(self)
 
@@ -141,10 +143,8 @@ class CreateMultiCatTask(CoaddBaseTask):
         else:
             fileOutName = self.config.fileOutName
 
-        if os.path.isfile(fileOutName):
-
+        if os.path.isfile(fileOutName) and self.config.clobber:
             self.log.info("File for  %s exists. Exiting..." % (dataRef.dataId))
-
             return
 
         self.log.info("Processing %s" % (dataRef.dataId))
