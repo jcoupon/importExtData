@@ -143,7 +143,7 @@ class CreateMultiCatTask(CoaddBaseTask):
         else:
             fileOutName = self.config.fileOutName
 
-        if os.path.isfile(fileOutName) and self.config.clobber:
+        if os.path.isfile(fileOutName) and not self.config.clobber:
             self.log.info("File for  %s exists. Exiting..." % (dataRef.dataId))
             return
 
