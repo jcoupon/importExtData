@@ -263,8 +263,7 @@ class CreateMultiCatTask(CoaddBaseTask):
             isDuplicated   = not ref[i].get('detect.is-primary')
             isParent       = ref[i].get('deblend.nchild') != 0
             isEdge     = (ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge'))
-            hasBadCentroid = ref[i].get('centroid_sdss_flags')
-
+            hasBadCentroid = ref[i].get('centroid.sdss.flags')
 
             # print ref[i].get('flags.pixel.offimage')
 
