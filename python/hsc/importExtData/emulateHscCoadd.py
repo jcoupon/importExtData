@@ -100,15 +100,16 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
 
     measurePsf   = pexConfig.ConfigurableField(target = MeasurePsfTask, doc = "")
 
-
     def setDefaults(self):
 
         pexConfig.Config.setDefaults(self)
 
         self.detection.includeThresholdMultiplier = 10.0
+
+        self.detection.doFootprintBackground = True
+
         self.initialMeasurement.prefix = "initial."
         self.initialMeasurement.algorithms.names -= ["correctfluxes"]
-
 
         if False:
             """
@@ -232,9 +233,20 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         varMedian = np.median(varIn.getArray()[mskIn.getArray() == 0])
         varIn.getArray()[noDataIn] = varMedian
 
+
         # ---------------------------------------------- #
         # create exposure
         # ---------------------------------------------- #
+
+
+        ##### DEBUGGING
+        # img = afwImage.ImageF("/Users/coupon/data/CLAUDS/Gwyn/DEEPv3/Mega-u_8767_8c1.fits")
+        # weird = img.getArray()[:] > 8000.0
+        # print len(img.getArray()[:][weird])
+        # print np.max(img.getArray()), np.min(img.getArray())
+        # print img.getArray()
+        # return
+        ##########
 
         exposure = afwImage.ExposureF(skyInfo.bbox, skyInfo.wcs)
         maskedImage = afwImage.MaskedImageF(
@@ -289,6 +301,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         starSelectorConfig.sourceFluxField = "initial.flux.psf"
 
         starSelectorConfig.fluxMin = fluxMag0 * pow(10.0, -0.4*self.config.magLim)
+
 
         self.measurePsf.starSelector = starSelectorClass(starSelectorConfig)
 
