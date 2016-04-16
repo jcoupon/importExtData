@@ -106,7 +106,7 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
 
         self.detection.includeThresholdMultiplier = 10.0
 
-        self.detection.doFootprintBackground = True
+        self.detection.doFootprintBackground = False
 
         self.initialMeasurement.prefix = "initial."
         self.initialMeasurement.algorithms.names -= ["correctfluxes"]

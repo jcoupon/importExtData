@@ -320,6 +320,7 @@ class CreateMultiCatTask(CoaddBaseTask):
 
         # write catalog
         self.log.info("Writing {0:s}".format(fileOutName))
+        self.mkdir_p(os.path.dirname(fileOutName))
         merged.writeFits(fileOutName)
 
         return
