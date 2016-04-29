@@ -125,10 +125,16 @@ class CreateMultiCatTask(CoaddBaseTask):
 
         if coord.galactic.b.degree > 0.0:
             x, y = wcs.utils.skycoord_to_pixel(coord, dustMap.nWcs,  origin=0)
-            return float(dustMap.nMap[self.iround(y), self.iround(x)])
+            if np.isfinite(x) and np.isfinite(y):
+                return float(dustMap.nMap[self.iround(y), self.iround(x)])
+            else:
+                return 0.0
         else:
             x, y = wcs.utils.skycoord_to_pixel(coord, dustMap.sWcs,  origin=0)
-            return float(dustMap.sMap[self.iround(y), self.iround(x)])
+            if np.isfinite(x) and np.isfinite(y):
+                return float(dustMap.sMap[self.iround(y), self.iround(x)])
+            else:
+                return 0.0
 
 
     def run(self, dataRef, selectDataList=[]):
