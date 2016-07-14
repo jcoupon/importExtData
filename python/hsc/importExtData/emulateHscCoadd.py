@@ -320,11 +320,12 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         # measure psf
         psfRet  = self.measurePsf.run(exposure, sources, expId=0, matches=None)
 
-        cellSet = psfRet.cellSet
-        psf = psfRet.psf
-
-        #fwhm = self.config.initialPsf.fwhm / exposure.getWcs().pixelScale().asArcseconds()
-        #psf  = measAlg.DoubleGaussianPsf(15, 15, fwhm/(2*math.sqrt(2*math.log(2))))
+        if len(sources) < 8:
+            fwhm = self.config.initialPsf.fwhm / exposure.getWcs().pixelScale().asArcseconds()
+            psf  = measAlg.DoubleGaussianPsf(15, 15, fwhm/(2*math.sqrt(2*math.log(2))))
+        else:
+            cellSet = psfRet.cellSet
+            psf = psfRet.psf
 
         display = False
         if display:
