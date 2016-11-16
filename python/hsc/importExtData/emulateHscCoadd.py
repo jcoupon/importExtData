@@ -24,7 +24,6 @@ import math
 import errno
 import os
 
-
 import lsst.pex.config as pexConfig
 from lsst.pipe.tasks.coaddBase import CoaddBaseTask
 from lsst.pipe.tasks.calibrate import CalibrateTask
@@ -67,13 +66,12 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
     """Config for EmulateHscCoaddTask
     """
 
-    imgInName = pexConfig.Field("Name of input image",          str, "im.fits")
-    mskInName = pexConfig.Field("Name of input mask",           str, "msk.fits")
+    imgInName = pexConfig.Field("Name of input image", str, "im.fits")
+    mskInName = pexConfig.Field("Name of input mask", str, "msk.fits")
     varInName = pexConfig.Field("Name of input variance image", str, "var.fits")
 
     mskInRef = pexConfig.Field("Use mask image from reference image", bool, False)
     weight = pexConfig.Field("Set if variance file is weight", bool, False)
-
 
     # fileOutName = pexConfig.Field("Name of output file", str, "exposure.fits")
 
@@ -115,8 +113,8 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
             """
             This is HSC config, but it seems that PSFex isn't working on coadds. deblend.nchild is also
             returning an error
-
             """
+
             import os
             self.initialMeasurement.load(os.path.join(os.environ['MEAS_EXTENSIONS_SHAPEHSM_DIR'], 'config', 'enable.py'))
             #self.initialMeasurement.algorithms["shape.hsm.regauss"].deblendNChild = "deblend.nchild"
@@ -134,7 +132,6 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
 #        initflags = [self.initialMeasurement.prefix+x
 #                     for x in self.measurePsf.starSelector["catalog"].badStarPixelFlags]
 #        self.measurePsf.starSelector["catalog"].badStarPixelFlags.extend(initflags)
-
 
         # Crashes if > 0.0
         # TODO: implement it
@@ -422,8 +419,6 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         return None
     def _getMetadataName(self):
         return None
-
-
 
     def mkdir_p(self, path):
         try:

@@ -20,7 +20,6 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
-
 import numpy as np
 import errno
 import os
@@ -187,26 +186,25 @@ class CreateMultiCatTask(CoaddBaseTask):
 
         fields=[]
         # define table fields
-        fields.append(mergedSchema.addField("id",               type="L", doc="Unique id"))
-        fields.append(mergedSchema.addField("ra",               type="F", doc="ra [deg]"))
-        fields.append(mergedSchema.addField("dec",              type="F", doc="dec [deg]"))
-        fields.append(mergedSchema.addField("countInputs",      type="I", doc="Number of input single exposures for the reference filter"))
-        fields.append(mergedSchema.addField("detRadius",        type="F", doc="Determinant radius for the object in the reference filter = sigma if gaussian [arcsec]"))
-        fields.append(mergedSchema.addField("PSFDetRadius",     type="F", doc="Determinant radius for the PSF at the object position = sigma if gaussian [arcsec]"))
-        fields.append(mergedSchema.addField("cmodel_fracDev",   type="F", doc="fraction of flux in de Vaucouleur component"))
-        fields.append(mergedSchema.addField("blendedness",      type="F", doc="Ranges from 0 (unblended) to 1 (blended)"))
-        fields.append(mergedSchema.addField("EB_V",             type="F", doc="Milky Way dust E(B-V) [mag]"))
-        fields.append(mergedSchema.addField("extendedness",     type="F", doc="probability of being extended from PSF/cmodel flux difference"))
+        fields.append(mergedSchema.addField("id", type="L", doc="Unique id"))
+        fields.append(mergedSchema.addField("ra", type="F", doc="ra [deg]"))
+        fields.append(mergedSchema.addField("dec", type="F", doc="dec [deg]"))
+        fields.append(mergedSchema.addField("countInputs", type="I", doc="Number of input single exposures for the reference filter"))
+        fields.append(mergedSchema.addField("detRadius", type="F", doc="Determinant radius for the object in the reference filter = sigma if gaussian [arcsec]"))
+        fields.append(mergedSchema.addField("PSFDetRadius", type="F", doc="Determinant radius for the PSF at the object position = sigma if gaussian [arcsec]"))
+        fields.append(mergedSchema.addField("cmodel_fracDev", type="F", doc="fraction of flux in de Vaucouleur component"))
+        fields.append(mergedSchema.addField("blendedness", type="F", doc="Ranges from 0 (unblended) to 1 (blended)"))
+        fields.append(mergedSchema.addField("EB_V", type="F", doc="Milky Way dust E(B-V) [mag]"))
+        fields.append(mergedSchema.addField("extendedness", type="F", doc="probability of being extended from PSF/cmodel flux difference"))
+        fields.append(mergedSchema.addField("hasBadCentroid", type="I", doc="1 if has bad centroid (but not used in islean"))
 
-        fields.append(mergedSchema.addField("hasBadCentroid",   type="I", doc="1 if has bad centroid (but not used in islean"))
-
-        fields.append(mergedSchema.addField("isSky",            type="I", doc="1 if sky object"))
-        fields.append(mergedSchema.addField("isDuplicated",     type="I", doc="1 if outside the inner tract or patch"))
-        fields.append(mergedSchema.addField("isEdge",           type="I", doc="1 if offImage or in region masked EDGE or NO_DATA"))
+        fields.append(mergedSchema.addField("isSky", type="I", doc="1 if sky object"))
+        fields.append(mergedSchema.addField("isDuplicated", type="I", doc="1 if outside the inner tract or patch"))
+        fields.append(mergedSchema.addField("isEdge", type="I", doc="1 if offImage or in region masked EDGE or NO_DATA"))
         fields.append(mergedSchema.addField("hasBadPhotometry", type="I", doc="1 if interpolated, saturated, suspect, has CR at center or near bright object"))
-        fields.append(mergedSchema.addField("isParent",         type="I", doc="1 if parent of a deblended object"))
-        fields.append(mergedSchema.addField("isClean",          type="I", doc="1 if none of other flags is set"))
-        fields.append(mergedSchema.addField("refFilter",        type="String", size=10, doc="Name of the filter used as reference"))
+        fields.append(mergedSchema.addField("isParent", type="I", doc="1 if parent of a deblended object"))
+        fields.append(mergedSchema.addField("isClean", type="I", doc="1 if none of other flags is set"))
+        fields.append(mergedSchema.addField("refFilter", type="String", size=10, doc="Name of the filter used as reference"))
 
         # photometry estimates
         photo = ["flux.aperture", "flux.kron", "flux.psf", "cmodel.flux"]
@@ -265,10 +263,10 @@ class CreateMultiCatTask(CoaddBaseTask):
                 if hasBadPhotometry:
                     break
 
-            isSky          = ref[i].get('merge.footprint.sky')
-            isDuplicated   = not ref[i].get('detect.is-primary')
-            isParent       = ref[i].get('deblend.nchild') != 0
-            isEdge     = (ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge'))
+            isSky = ref[i].get('merge.footprint.sky')
+            isDuplicated = not ref[i].get('detect.is-primary')
+            isParent = ref[i].get('deblend.nchild') != 0
+            isEdge = (ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge'))
             hasBadCentroid = ref[i].get('centroid.sdss.flags')
 
             # print ref[i].get('flags.pixel.offimage')
@@ -282,23 +280,23 @@ class CreateMultiCatTask(CoaddBaseTask):
             #    isExtended = 0
 
             # record common info from reference filter
-            record.set(mergedSchema['id'].asKey(),               ref[i].get('id'))
-            record.set(mergedSchema['ra'].asKey(),               coord.toFk5().getRa().asDegrees())
-            record.set(mergedSchema['dec'].asKey(),              coord.toFk5().getDec().asDegrees())
-            record.set(mergedSchema['countInputs'].asKey(),      ref[i].get('countInputs'))
-            record.set(mergedSchema['detRadius'].asKey(),        ref[i].get("shape.sdss").getDeterminantRadius()*pixel_scale)
-            record.set(mergedSchema['PSFDetRadius'].asKey(),     ref[i].get("shape.sdss.psf").getDeterminantRadius()*pixel_scale)
-            record.set(mergedSchema['cmodel_fracDev'].asKey(),   ref[i].get('cmodel.fracDev'))
-            record.set(mergedSchema['blendedness'].asKey(),      ref[i].get('blendedness.abs.flux'))
-            record.set(mergedSchema['extendedness'].asKey(),     ref[i].get('classification.extendedness'))
+            record.set(mergedSchema['id'].asKey(), ref[i].get('id'))
+            record.set(mergedSchema['ra'].asKey(), coord.toFk5().getRa().asDegrees())
+            record.set(mergedSchema['dec'].asKey(), coord.toFk5().getDec().asDegrees())
+            record.set(mergedSchema['countInputs'].asKey(), ref[i].get('countInputs'))
+            record.set(mergedSchema['detRadius'].asKey(), ref[i].get("shape.sdss").getDeterminantRadius()*pixel_scale)
+            record.set(mergedSchema['PSFDetRadius'].asKey(), ref[i].get("shape.sdss.psf").getDeterminantRadius()*pixel_scale)
+            record.set(mergedSchema['cmodel_fracDev'].asKey(), ref[i].get('cmodel.fracDev'))
+            record.set(mergedSchema['blendedness'].asKey(), ref[i].get('blendedness.abs.flux'))
+            record.set(mergedSchema['extendedness'].asKey(), ref[i].get('classification.extendedness'))
 
-            record.set(mergedSchema['hasBadCentroid'].asKey(),   int(hasBadCentroid))
-            record.set(mergedSchema['isSky'].asKey(),            int(isSky))
-            record.set(mergedSchema['isDuplicated'].asKey(),     int(isDuplicated))
-            record.set(mergedSchema['isEdge'].asKey(),       int(isEdge))
+            record.set(mergedSchema['hasBadCentroid'].asKey(), int(hasBadCentroid))
+            record.set(mergedSchema['isSky'].asKey(), int(isSky))
+            record.set(mergedSchema['isDuplicated'].asKey(), int(isDuplicated))
+            record.set(mergedSchema['isEdge'].asKey(), int(isEdge))
             record.set(mergedSchema['hasBadPhotometry'].asKey(), int(hasBadPhotometry))
-            record.set(mergedSchema['isParent'].asKey(),         int(isParent))
-            record.set(mergedSchema['isClean'].asKey(),          int(isClean))
+            record.set(mergedSchema['isParent'].asKey(), int(isParent))
+            record.set(mergedSchema['isClean'].asKey(), int(isClean))
             #record.set(mergedSchema['isExtended'].asKey(),       int(isExtended))
 
             # dust correction
@@ -315,14 +313,14 @@ class CreateMultiCatTask(CoaddBaseTask):
                             flux     = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p)[a] / fluxMag0[f]
                             flux_err = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p+".err")[a] / fluxMag0[f]
                             keyName = (p+"_"+str(int(a))+"arcsec_"+f).replace(".", "_").replace("-", "_")
-                            record.set(mergedSchema[keyName].asKey(),          flux)
-                            record.set(mergedSchema[keyName+"_err"].asKey(),   flux_err)
+                            record.set(mergedSchema[keyName].asKey(), flux)
+                            record.set(mergedSchema[keyName+"_err"].asKey(), flux_err)
                     else:
-                        flux     = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p) / fluxMag0[f]
-                        flux_err = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p+".err") / fluxMag0[f]
+                        flux     = pow(10.0, 23.9/2.5)*catalogs[f][i].get(p)/fluxMag0[f]
+                        flux_err = pow(10.0, 23.9/2.5)*catalogs[f][i].get(p+".err")/fluxMag0[f]
                         keyName =  (p+"_"+f).replace(".", "_").replace("-", "_")
-                        record.set(mergedSchema[keyName].asKey(),          flux)
-                        record.set(mergedSchema[keyName+"_err"].asKey(),   flux_err)
+                        record.set(mergedSchema[keyName].asKey(), flux)
+                        record.set(mergedSchema[keyName+"_err"].asKey(), flux_err)
 
         # write catalog
         self.log.info("Writing {0:s}".format(fileOutName))
