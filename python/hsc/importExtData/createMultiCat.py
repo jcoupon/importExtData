@@ -298,6 +298,8 @@ class CreateMultiCatTask(CoaddBaseTask):
                                 |  (catalogs[f][i].get('flags.pixel.bad')) \
                                 |  (catalogs[f][i].get('flags.pixel.bright.object.center'))))
 
+            """record isClean flag for reference filter
+            """
             hasBadPhotometry_refFilter = \
                 (ref[i].get('flags.pixel.interpolated.center')) \
                 |  (ref[i].get('flags.pixel.saturated.center')) \
