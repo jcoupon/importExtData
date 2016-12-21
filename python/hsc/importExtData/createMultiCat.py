@@ -305,7 +305,7 @@ class CreateMultiCatTask(CoaddBaseTask):
                 |  (ref[i].get('flags.pixel.cr.center')) \
                 |  (ref[i].get('flags.pixel.bad')) \
                 |  (ref[i].get('flags.pixel.bright.object.center'))
-            isEdge_refFilter = ref[i].get('flags.pixel.offimage') | (ref[i].get('flags.pixel.edge')
+            isEdge_refFilter = (ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge'))
             isSky_refFilter = ref[i].get('merge.footprint.sky')
             isDuplicated_refFilter = not ref[i].get('detect.is-primary')
             isParent_refFilter = ref[i].get('deblend.nchild') != 0
