@@ -242,9 +242,9 @@ class CreateMultiCatTask(CoaddBaseTask):
 
         N = len(ref)
         count = 0
-        # for i in range(N):
+        for i in range(N):
         # for i in range(10000,10200):
-        for i in range(1,100):
+        # for i in range(1,100):
 
             """create new record
             """
