@@ -209,7 +209,6 @@ class CreateMultiCatTask(CoaddBaseTask):
         fields.append(mergedSchema.addField("refFilter", type="String", size=10, doc="Name of the filter used as reference"))
         fields.append(mergedSchema.addField("isClean_refFilter", type="I", doc="1 if none of other flags is set for reference filter"))
 
-
         for f in filters:
             fields.append(mergedSchema.addField("hasBadPhotometry_{0:s}".format(f.replace(".", "_").replace("-", "_")), type="I", doc="1 if interpolated, saturated, suspect, has CR at center or near bright object for filter {0:s}".format(f)))
         for f in filters:
@@ -241,7 +240,7 @@ class CreateMultiCatTask(CoaddBaseTask):
         merged = afwTable.BaseCatalog(mergedSchema)
 
         N = len(ref)
-        count = 0
+        # count = 0
         for i in range(N):
         # for i in range(10000,10200):
         # for i in range(1,100):
@@ -306,7 +305,7 @@ class CreateMultiCatTask(CoaddBaseTask):
                 |  (ref[i].get('flags.pixel.cr.center')) \
                 |  (ref[i].get('flags.pixel.bad')) \
                 |  (ref[i].get('flags.pixel.bright.object.center'))
-            isEdge_refFilter = (ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge')
+            isEdge_refFilter = ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge')
             isSky_refFilter = ref[i].get('merge.footprint.sky')
             isDuplicated_refFilter = not ref[i].get('detect.is-primary')
             isParent_refFilter = ref[i].get('deblend.nchild') != 0
@@ -350,7 +349,7 @@ class CreateMultiCatTask(CoaddBaseTask):
                         record.set(mergedSchema[keyName].asKey(), flux)
                         record.set(mergedSchema[keyName+"_err"].asKey(), flux_err)
 
-            count += 1
+            # count += 1
 
         """write catalog
         """
