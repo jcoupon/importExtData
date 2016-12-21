@@ -154,12 +154,12 @@ class CreateMultiCatTask(CoaddBaseTask):
 
         self.log.info("Processing %s" % (dataRef.dataId))
 
-        filters   = self.config.filters.split("^")
+        filters = self.config.filters.split("^")
         dustCoefs = [float(c) for c in self.config.dustCoefs.split("^") ]
-        ref       = dataRef.get("deepCoadd_ref")
+        ref = dataRef.get("deepCoadd_ref")
 
         catalogs = dict(self.readCatalog(dataRef, f) for f in filters)
-        coadds   = dict(self.readCoadd(dataRef, f) for f in filters)
+        coadds = dict(self.readCoadd(dataRef, f) for f in filters)
 
         # print ref.schema.getOrderedNames()
         # print dir(ref.schema)
@@ -171,24 +171,30 @@ class CreateMultiCatTask(CoaddBaseTask):
             fluxMag0[f] = coadds[f].getCalib().getFluxMag0()[0]
             self.log.info("Mag ZP for filter {0:s}: {1:f}".format(f, 2.5*np.log10(fluxMag0[f])))
 
-        wcs         = coadds[filters[0]].getWcs()
+        wcs = coadds[filters[0]].getWcs()
         pixel_scale = wcs.pixelScale().asDegrees()*3600.0
 
         aperId = [int(a) for a in self.config.aperId.split(",")]
 
-        # display which aperture diameter size will be used
+        """display which aperture diameter size will be used
+        """
         aperSize = []
         for j, a in enumerate(aperId):
             aperSize.append(catalogs[filters[0]].getMetadata().get("flux_aperture_radii")[a] * 2.0 * pixel_scale)
             self.log.info("Diameter of flux apertures: {0:f}\"".format(aperSize[j]))
-        # create new table table
+
+        """create new table table
+        """
         mergedSchema = afwTable.Schema()
 
+        """define table fields
+        """
         fields=[]
-        # define table fields
         fields.append(mergedSchema.addField("id", type="L", doc="Unique id"))
         fields.append(mergedSchema.addField("ra", type="F", doc="ra [deg]"))
         fields.append(mergedSchema.addField("dec", type="F", doc="dec [deg]"))
+        fields.append(mergedSchema.addField("tract", type="I", doc="tract number"))
+        fields.append(mergedSchema.addField("patch", type="String", size=3, doc="patch number"))
         fields.append(mergedSchema.addField("countInputs", type="I", doc="Number of input single exposures for the reference filter"))
         fields.append(mergedSchema.addField("detRadius", type="F", doc="Determinant radius for the object in the reference filter = sigma if gaussian [arcsec]"))
         fields.append(mergedSchema.addField("PSFDetRadius", type="F", doc="Determinant radius for the PSF at the object position = sigma if gaussian [arcsec]"))
@@ -197,16 +203,20 @@ class CreateMultiCatTask(CoaddBaseTask):
         fields.append(mergedSchema.addField("EB_V", type="F", doc="Milky Way dust E(B-V) [mag]"))
         fields.append(mergedSchema.addField("extendedness", type="F", doc="probability of being extended from PSF/cmodel flux difference"))
         fields.append(mergedSchema.addField("hasBadCentroid", type="I", doc="1 if has bad centroid (but not used in islean"))
-
         fields.append(mergedSchema.addField("isSky", type="I", doc="1 if sky object"))
         fields.append(mergedSchema.addField("isDuplicated", type="I", doc="1 if outside the inner tract or patch"))
-        fields.append(mergedSchema.addField("isEdge", type="I", doc="1 if offImage or in region masked EDGE or NO_DATA"))
-        fields.append(mergedSchema.addField("hasBadPhotometry", type="I", doc="1 if interpolated, saturated, suspect, has CR at center or near bright object"))
         fields.append(mergedSchema.addField("isParent", type="I", doc="1 if parent of a deblended object"))
-        fields.append(mergedSchema.addField("isClean", type="I", doc="1 if none of other flags is set"))
         fields.append(mergedSchema.addField("refFilter", type="String", size=10, doc="Name of the filter used as reference"))
+        fields.append(mergedSchema.addField("isClean_refFilter", type="I", doc="1 if none of other flags is set for reference filter"))
 
-        # photometry estimates
+
+        for f in filters:
+            fields.append(mergedSchema.addField("hasBadPhotometry_{0:s}".format(f.replace(".", "_").replace("-", "_")), type="I", doc="1 if interpolated, saturated, suspect, has CR at center or near bright object for filter {0:s}".format(f)))
+        for f in filters:
+            fields.append(mergedSchema.addField("isEdge_{0:s}".format(f.replace(".", "_").replace("-", "_")), type="I", doc="1 if offImage or in region masked EDGE or NO_DATA for filter {0:s}".format(f)))
+
+        """photometry estimates
+        """
         photo = ["flux.aperture", "flux.kron", "flux.psf", "cmodel.flux"]
         for p in photo:
             for f in filters:
@@ -221,30 +231,55 @@ class CreateMultiCatTask(CoaddBaseTask):
                     fields.append(mergedSchema.addField(keyName+"_err", type="F", doc="{0:s} error for filter {1:s}".format(p,f)))
             fields.append(mergedSchema.addField(p+"_flag".replace(".", "_"),   type="I", doc="Highest flag value among filters for {0:s}".format(p)))
 
-        # dust corrections
+        """dust corrections
+        """
         for f in filters:
             fields.append(mergedSchema.addField(("EB_V_corr_"+f).replace(".", "_").replace("-", "_"),   type="F", doc="Milky way dust flux correction for filter {0:s}".format(f)))
 
-        # create table object
+        """create table object
+        """
         merged = afwTable.BaseCatalog(mergedSchema)
 
         N = len(ref)
-        for i in range(N):
+        count = 0
+        # for i in range(N):
         # for i in range(10000,10200):
-        # for i in range(1,100):
+        for i in range(1,100):
 
-            # create new record
+            """create new record
+            """
             record = merged.addNew()
             coord = ref[i].get('coord')
 
-            # record the name of the filter used as reference
+            """record common info from reference filter
+            """
+            record.set(mergedSchema['id'].asKey(), ref[i].get('id'))
+            record.set(mergedSchema['ra'].asKey(), coord.toFk5().getRa().asDegrees())
+            record.set(mergedSchema['dec'].asKey(), coord.toFk5().getDec().asDegrees())
+            record.set(mergedSchema['tract'].asKey(), dataRef.dataId["tract"])
+            record.set(mergedSchema['patch'].asKey(), dataRef.dataId["patch"])
+            record.set(mergedSchema['countInputs'].asKey(), ref[i].get('countInputs'))
+            record.set(mergedSchema['detRadius'].asKey(), ref[i].get("shape.sdss").getDeterminantRadius()*pixel_scale)
+            record.set(mergedSchema['PSFDetRadius'].asKey(), ref[i].get("shape.sdss.psf").getDeterminantRadius()*pixel_scale)
+            record.set(mergedSchema['cmodel_fracDev'].asKey(), ref[i].get('cmodel.fracDev'))
+            record.set(mergedSchema['blendedness'].asKey(), ref[i].get('blendedness.abs.flux'))
+            record.set(mergedSchema['extendedness'].asKey(), ref[i].get('classification.extendedness'))
+            record.set(mergedSchema['hasBadCentroid'].asKey(), int(ref[i].get('centroid.sdss.flags')))
+            record.set(mergedSchema['isSky'].asKey(), int(ref[i].get('merge.footprint.sky')))
+            record.set(mergedSchema['isDuplicated'].asKey(), int(not ref[i].get('detect.is-primary')))
+            record.set(mergedSchema['isParent'].asKey(), int(ref[i].get('deblend.nchild') != 0))
+
+            """record the name of the filter used as reference
+            """
             for f in filters:
                 name = afwImage.Filter(afwImage.Filter(f).getId()).getName()
                 if ref[i].get("merge.measurement."+name):
-                    record.set(mergedSchema["refFilter"].asKey(), f)
+                    refName = f.replace(".", "_").replace("-", "_")
+                    record.set(mergedSchema["refFilter"].asKey(), refName)
                     break
 
-            # photometry measurement flags
+            """photometry measurement flags
+            """
             for p in photo:
                 flag = 0
                 for f in filters:
@@ -252,77 +287,61 @@ class CreateMultiCatTask(CoaddBaseTask):
                         flag = catalogs[f][i].get(p+".flags")
                 record.set(mergedSchema[p+"_flag".replace(".", "_")].asKey(), flag)
 
-            # record if any of the filter is flagged as bad photometry
+            """record bad photometry flag for each filter
+            """
             for f in filters:
-                hasBadPhotometry = (catalogs[f][i].get('flags.pixel.interpolated.center')) \
+                record.set(mergedSchema["isEdge_{0:s}".format(f.replace(".", "_").replace("-", "_"))].asKey(), int((ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge'))))
+                record.set(mergedSchema["hasBadPhotometry_{0:s}".format(f.replace(".", "_").replace("-", "_"))].asKey(), int(
+                                (catalogs[f][i].get('flags.pixel.interpolated.center')) \
                                 |  (catalogs[f][i].get('flags.pixel.saturated.center')) \
                                 |  (catalogs[f][i].get('flags.pixel.suspect.center'))  \
                                 |  (catalogs[f][i].get('flags.pixel.cr.center')) \
                                 |  (catalogs[f][i].get('flags.pixel.bad')) \
-                                |  (catalogs[f][i].get('flags.pixel.bright.object.center'))
-                if hasBadPhotometry:
-                    break
+                                |  (catalogs[f][i].get('flags.pixel.bright.object.center'))))
 
-            isSky = ref[i].get('merge.footprint.sky')
-            isDuplicated = not ref[i].get('detect.is-primary')
-            isParent = ref[i].get('deblend.nchild') != 0
-            isEdge = (ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge'))
-            hasBadCentroid = ref[i].get('centroid.sdss.flags')
-
-            # print ref[i].get('flags.pixel.offimage')
-
-            isClean = (not hasBadPhotometry) & (not isSky) & (not isDuplicated) & (not isParent) & (not isEdge)
+            record.set(mergedSchema["isClean_refFilter"].asKey(), int(
+                    (not merged["hasBadPhotometry_{0:s}".format(refName)][count]) \
+                    & (not merged["isEdge_{0:s}".format(refName)][count]) \
+                    & (not merged["isSky"][count]) \
+                    & (not merged["isDuplicated"][count]) \
+                    & (not merged["isParent"][count])))
 
             #isExtended = (ref[i].get('classification.extendedness'))
             #isExtended = (catalogs[f][i].get('flux.kron') > 0.8*catalogs[f][i].get('flux.psf')) | \
             #              (ref.get("shape.sdss").getDeterminantRadius() > 1.1*ref.get("shape.sdss.psf").getDeterminantRadius())
             #if not (isExtended == isExtended):
             #    isExtended = 0
+            #record.set(mergedSchema['isExtended'].asKey(), int(isExtended))
 
-            # record common info from reference filter
-            record.set(mergedSchema['id'].asKey(), ref[i].get('id'))
-            record.set(mergedSchema['ra'].asKey(), coord.toFk5().getRa().asDegrees())
-            record.set(mergedSchema['dec'].asKey(), coord.toFk5().getDec().asDegrees())
-            record.set(mergedSchema['countInputs'].asKey(), ref[i].get('countInputs'))
-            record.set(mergedSchema['detRadius'].asKey(), ref[i].get("shape.sdss").getDeterminantRadius()*pixel_scale)
-            record.set(mergedSchema['PSFDetRadius'].asKey(), ref[i].get("shape.sdss.psf").getDeterminantRadius()*pixel_scale)
-            record.set(mergedSchema['cmodel_fracDev'].asKey(), ref[i].get('cmodel.fracDev'))
-            record.set(mergedSchema['blendedness'].asKey(), ref[i].get('blendedness.abs.flux'))
-            record.set(mergedSchema['extendedness'].asKey(), ref[i].get('classification.extendedness'))
-
-            record.set(mergedSchema['hasBadCentroid'].asKey(), int(hasBadCentroid))
-            record.set(mergedSchema['isSky'].asKey(), int(isSky))
-            record.set(mergedSchema['isDuplicated'].asKey(), int(isDuplicated))
-            record.set(mergedSchema['isEdge'].asKey(), int(isEdge))
-            record.set(mergedSchema['hasBadPhotometry'].asKey(), int(hasBadPhotometry))
-            record.set(mergedSchema['isParent'].asKey(), int(isParent))
-            record.set(mergedSchema['isClean'].asKey(), int(isClean))
-            #record.set(mergedSchema['isExtended'].asKey(),       int(isExtended))
-
-            # dust correction
+            """dust correction
+            """
             EB_V = self.getDustCorrection(self.dustMap, record.get(mergedSchema['ra'].asKey()), record.get(mergedSchema['dec'].asKey()))
             record.set(mergedSchema['EB_V'].asKey(), EB_V)
 
-            # flux in micro Jansky
+            """flux in micro Jansky
+            """
             for f, dc in zip(filters, dustCoefs):
 
                 record.set(mergedSchema[("EB_V_corr_"+f).replace(".", "_").replace("-", "_")].asKey(), pow(10.0, +0.4* dc * EB_V))
                 for p in photo:
                     if p == "flux.aperture":
                         for a in aperId:
-                            flux     = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p)[a] / fluxMag0[f]
+                            flux = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p)[a] / fluxMag0[f]
                             flux_err = pow(10.0, 23.9/2.5) * catalogs[f][i].get(p+".err")[a] / fluxMag0[f]
                             keyName = (p+"_"+str(int(a))+"arcsec_"+f).replace(".", "_").replace("-", "_")
                             record.set(mergedSchema[keyName].asKey(), flux)
                             record.set(mergedSchema[keyName+"_err"].asKey(), flux_err)
                     else:
-                        flux     = pow(10.0, 23.9/2.5)*catalogs[f][i].get(p)/fluxMag0[f]
+                        flux = pow(10.0, 23.9/2.5)*catalogs[f][i].get(p)/fluxMag0[f]
                         flux_err = pow(10.0, 23.9/2.5)*catalogs[f][i].get(p+".err")/fluxMag0[f]
-                        keyName =  (p+"_"+f).replace(".", "_").replace("-", "_")
+                        keyName = (p+"_"+f).replace(".", "_").replace("-", "_")
                         record.set(mergedSchema[keyName].asKey(), flux)
                         record.set(mergedSchema[keyName+"_err"].asKey(), flux_err)
 
-        # write catalog
+            count += 1
+
+        """write catalog
+        """
         self.log.info("Writing {0:s}".format(fileOutName))
         self.mkdir_p(os.path.dirname(fileOutName))
         merged.writeFits(fileOutName)
@@ -330,14 +349,14 @@ class CreateMultiCatTask(CoaddBaseTask):
         return
 
 
-    # Don't forget to overload these
+    """ Don't forget to overload these
+    """
     def _getConfigName(self):
         return None
     def _getEupsVersionsName(self):
         return None
     def _getMetadataName(self):
         return None
-
 
     def mkdir_p(self, path):
         try:

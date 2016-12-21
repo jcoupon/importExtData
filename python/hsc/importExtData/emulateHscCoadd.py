@@ -299,6 +299,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
         starSelectorConfig.fluxMin = fluxMag0 * pow(10.0, -0.4*self.config.magLim)
 
+        # print starSelectorConfig.fluxMin
 
         self.measurePsf.starSelector = starSelectorClass(starSelectorConfig)
 
