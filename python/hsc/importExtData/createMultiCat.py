@@ -290,7 +290,7 @@ class CreateMultiCatTask(CoaddBaseTask):
             """record bad photometry flag for each filter
             """
             for f in filters:
-                record.set(mergedSchema["isEdge_{0:s}".format(f.replace(".", "_").replace("-", "_"))].asKey(), int((ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge'))))
+                record.set(mergedSchema["isEdge_{0:s}".format(f.replace(".", "_").replace("-", "_"))].asKey(), int((catalogs[f][i].get('flags.pixel.offimage')) | (catalogs[f][i].get('flags.pixel.edge'))))
                 record.set(mergedSchema["hasBadPhotometry_{0:s}".format(f.replace(".", "_").replace("-", "_"))].asKey(), int(
                                 (catalogs[f][i].get('flags.pixel.interpolated.center')) \
                                 |  (catalogs[f][i].get('flags.pixel.saturated.center')) \
@@ -299,12 +299,24 @@ class CreateMultiCatTask(CoaddBaseTask):
                                 |  (catalogs[f][i].get('flags.pixel.bad')) \
                                 |  (catalogs[f][i].get('flags.pixel.bright.object.center'))))
 
+            hasBadPhotometry_refFilter = \
+                (ref[i].get('flags.pixel.interpolated.center')) \
+                |  (ref[i].get('flags.pixel.saturated.center')) \
+                |  (ref[i].get('flags.pixel.suspect.center'))  \
+                |  (ref[i].get('flags.pixel.cr.center')) \
+                |  (ref[i].get('flags.pixel.bad')) \
+                |  (ref[i].get('flags.pixel.bright.object.center'))
+            isEdge_refFilter = (ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge')
+            isSky_refFilter = ref[i].get('merge.footprint.sky')
+            isDuplicated_refFilter = not ref[i].get('detect.is-primary')
+            isParent_refFilter = ref[i].get('deblend.nchild') != 0
+
             record.set(mergedSchema["isClean_refFilter"].asKey(), int(
-                    (not merged["hasBadPhotometry_{0:s}".format(refName)][count]) \
-                    & (not merged["isEdge_{0:s}".format(refName)][count]) \
-                    & (not merged["isSky"][count]) \
-                    & (not merged["isDuplicated"][count]) \
-                    & (not merged["isParent"][count])))
+                    (not hasBadPhotometry_refFilter) \
+                    & (not isEdge_refFilter) \
+                    & (not isSky_refFilter) \
+                    & (not isDuplicated_refFilter) \
+                    & (not isParent_refFilter)))
 
             #isExtended = (ref[i].get('classification.extendedness'))
             #isExtended = (catalogs[f][i].get('flux.kron') > 0.8*catalogs[f][i].get('flux.psf')) | \
