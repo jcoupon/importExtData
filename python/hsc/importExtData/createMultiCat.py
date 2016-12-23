@@ -35,9 +35,10 @@ __all__ = ["CreateMultiCatTask"]
 
 class CreateMultiCatConfig(CoaddBaseTask.ConfigClass):
 
-    filters   = pexConfig.Field("Name of filters to combine [default HSC-G^HSC-R^HSC-I^HSC-Z^HSC-Y]", str, "HSC-G^HSC-R^HSC-I^HSC-Z^HSC-Y")
-    dustCoefs = pexConfig.Field("Correction coefficient to compute dust correction [default 3.711^2.626^1.916^1.469^1.242]", str, "3.711^2.626^1.916^1.469^1.242")
-    aperId    = pexConfig.Field("Aperture id", str, "2,3")
+    filters = pexConfig.Field("Names of filters to combine [default HSC-G^HSC-R^HSC-I^HSC-Z^HSC-Y]", str, "HSC-G^HSC-R^HSC-I^HSC-Z^HSC-Y")
+    ghostFilters = pexConfig.Field("Names of ghost filters to add in the output catalogue [default None", str, "")
+    dustCoefs = pexConfig.Field("Correction coefficients to compute dust correction [default 3.711^2.626^1.916^1.469^1.242]", str, "3.711^2.626^1.916^1.469^1.242")
+    aperId = pexConfig.Field("Aperture id", str, "2,3")
 
     fileOutName = pexConfig.Field("Name of output file", str, "")
     dirOutName  = pexConfig.Field("Name of output directory (will write output files as dirOutName/FILTER/TRACT/PATCH/multiCat-FILTER-TRACT-PATCH.fits)", str, "")
@@ -161,6 +162,9 @@ class CreateMultiCatTask(CoaddBaseTask):
         catalogs = dict(self.readCatalog(dataRef, f) for f in filters)
         coadds = dict(self.readCoadd(dataRef, f) for f in filters)
 
+        ghostFilters = self.config.ghostFilters.split("^")
+        self.log.info("Ghost filters: %s" % ghostFilters)
+
         # print ref.schema.getOrderedNames()
         # print dir(ref.schema)
         # print catalogs[filters[0]].schema.getOrderedNames()
@@ -195,9 +199,10 @@ class CreateMultiCatTask(CoaddBaseTask):
         fields.append(mergedSchema.addField("dec", type="F", doc="dec [deg]"))
         fields.append(mergedSchema.addField("tract", type="I", doc="tract number"))
         fields.append(mergedSchema.addField("patch", type="String", size=3, doc="patch number"))
+        fields.append(mergedSchema.addField("refFilter", type="String", size=10, doc="Name of the filter used as reference"))
         fields.append(mergedSchema.addField("countInputs", type="I", doc="Number of input single exposures for the reference filter"))
         fields.append(mergedSchema.addField("detRadius", type="F", doc="Determinant radius for the object in the reference filter = sigma if gaussian [arcsec]"))
-        fields.append(mergedSchema.addField("PSFDetRadius", type="F", doc="Determinant radius for the PSF at the object position = sigma if gaussian [arcsec]"))
+        fields.append(mergedSchema.addField("PSFDetRadius", type="F", doc="Determinant radius for the PSF in the reference filter at the object position = sigma if gaussian [arcsec]"))
         fields.append(mergedSchema.addField("cmodel_fracDev", type="F", doc="fraction of flux in de Vaucouleur component"))
         fields.append(mergedSchema.addField("blendedness", type="F", doc="Ranges from 0 (unblended) to 1 (blended)"))
         fields.append(mergedSchema.addField("EB_V", type="F", doc="Milky Way dust E(B-V) [mag]"))
@@ -206,33 +211,31 @@ class CreateMultiCatTask(CoaddBaseTask):
         fields.append(mergedSchema.addField("isSky", type="I", doc="1 if sky object"))
         fields.append(mergedSchema.addField("isDuplicated", type="I", doc="1 if outside the inner tract or patch"))
         fields.append(mergedSchema.addField("isParent", type="I", doc="1 if parent of a deblended object"))
-        fields.append(mergedSchema.addField("refFilter", type="String", size=10, doc="Name of the filter used as reference"))
         fields.append(mergedSchema.addField("isClean_refFilter", type="I", doc="1 if none of other flags is set for reference filter"))
-
-        for f in filters:
+        for f in filters+ghostFilters:
             fields.append(mergedSchema.addField("hasBadPhotometry_{0:s}".format(f.replace(".", "_").replace("-", "_")), type="I", doc="1 if interpolated, saturated, suspect, has CR at center or near bright object for filter {0:s}".format(f)))
-        for f in filters:
-            fields.append(mergedSchema.addField("isEdge_{0:s}".format(f.replace(".", "_").replace("-", "_")), type="I", doc="1 if offImage or in region masked EDGE or NO_DATA for filter {0:s}".format(f)))
+        for f in filters+ghostFilters:
+            fields.append(mergedSchema.addField("isNoData_{0:s}".format(f.replace(".", "_").replace("-", "_")), type="I", doc="1 if offImage or in region masked EDGE or NO_DATA for filter {0:s}".format(f)))
 
         """photometry estimates
         """
         photo = ["flux.aperture", "flux.kron", "flux.psf", "cmodel.flux"]
         for p in photo:
-            for f in filters:
+            for f in filters+ghostFilters:
                 if p == "flux.aperture":
                     for a in aperSize:
                         keyName = (p+"_"+str(int(a))+"arcsec_"+f).replace(".", "_").replace("-", "_")
-                        fields.append(mergedSchema.addField(keyName,        type="F", doc="{0:s} for filter {1:s} within {2:f}\" diameter aperture".format(p,f,a)))
+                        fields.append(mergedSchema.addField(keyName, type="F", doc="{0:s} for filter {1:s} within {2:f}\" diameter aperture".format(p,f,a)))
                         fields.append(mergedSchema.addField(keyName+"_err", type="F", doc="{0:s} error for filter {1:s}".format(p,f)))
                 else:
                     keyName = (p+"_"+f).replace(".", "_").replace("-", "_")
-                    fields.append(mergedSchema.addField(keyName,        type="F", doc="{0:s} for filter {1:s}".format(p,f)))
+                    fields.append(mergedSchema.addField(keyName, type="F", doc="{0:s} for filter {1:s}".format(p,f)))
                     fields.append(mergedSchema.addField(keyName+"_err", type="F", doc="{0:s} error for filter {1:s}".format(p,f)))
-            fields.append(mergedSchema.addField(p+"_flag".replace(".", "_"),   type="I", doc="Highest flag value among filters for {0:s}".format(p)))
+            fields.append(mergedSchema.addField(p+"_flag".replace(".", "_"), type="I", doc="Highest flag value among filters for {0:s}".format(p)))
 
         """dust corrections
         """
-        for f in filters:
+        for f in filters+ghostFilters:
             fields.append(mergedSchema.addField(("EB_V_corr_"+f).replace(".", "_").replace("-", "_"),   type="F", doc="Milky way dust flux correction for filter {0:s}".format(f)))
 
         """create table object
@@ -289,7 +292,7 @@ class CreateMultiCatTask(CoaddBaseTask):
             """record bad photometry flag for each filter
             """
             for f in filters:
-                record.set(mergedSchema["isEdge_{0:s}".format(f.replace(".", "_").replace("-", "_"))].asKey(), int((catalogs[f][i].get('flags.pixel.offimage')) | (catalogs[f][i].get('flags.pixel.edge'))))
+                record.set(mergedSchema["isNoData_{0:s}".format(f.replace(".", "_").replace("-", "_"))].asKey(), int((catalogs[f][i].get('flags.pixel.offimage')) | (catalogs[f][i].get('flags.pixel.edge'))))
                 record.set(mergedSchema["hasBadPhotometry_{0:s}".format(f.replace(".", "_").replace("-", "_"))].asKey(), int(
                                 (catalogs[f][i].get('flags.pixel.interpolated.center')) \
                                 |  (catalogs[f][i].get('flags.pixel.saturated.center')) \
@@ -297,6 +300,10 @@ class CreateMultiCatTask(CoaddBaseTask):
                                 |  (catalogs[f][i].get('flags.pixel.cr.center')) \
                                 |  (catalogs[f][i].get('flags.pixel.bad')) \
                                 |  (catalogs[f][i].get('flags.pixel.bright.object.center'))))
+
+            for f in ghostFilters:
+                record.set(mergedSchema["isNoData_{0:s}".format(f.replace(".", "_").replace("-", "_"))].asKey(), 1)
+                record.set(mergedSchema["hasBadPhotometry_{0:s}".format(f.replace(".", "_").replace("-", "_"))].asKey(), 1)
 
             """record isClean flag for reference filter
             """
@@ -307,14 +314,14 @@ class CreateMultiCatTask(CoaddBaseTask):
                 |  (ref[i].get('flags.pixel.cr.center')) \
                 |  (ref[i].get('flags.pixel.bad')) \
                 |  (ref[i].get('flags.pixel.bright.object.center'))
-            isEdge_refFilter = (ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge'))
+            isNoData_refFilter = (ref[i].get('flags.pixel.offimage')) | (ref[i].get('flags.pixel.edge'))
             isSky_refFilter = ref[i].get('merge.footprint.sky')
             isDuplicated_refFilter = not ref[i].get('detect.is-primary')
             isParent_refFilter = ref[i].get('deblend.nchild') != 0
 
             record.set(mergedSchema["isClean_refFilter"].asKey(), int(
                     (not hasBadPhotometry_refFilter) \
-                    & (not isEdge_refFilter) \
+                    & (not isNoData_refFilter) \
                     & (not isSky_refFilter) \
                     & (not isDuplicated_refFilter) \
                     & (not isParent_refFilter)))
