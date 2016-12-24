@@ -162,7 +162,9 @@ class CreateMultiCatTask(CoaddBaseTask):
         catalogs = dict(self.readCatalog(dataRef, f) for f in filters)
         coadds = dict(self.readCoadd(dataRef, f) for f in filters)
 
-        ghostFilters = self.config.ghostFilters.split("^")
+        ghostFilters = []
+        if self.config.ghostFilters != "":
+            ghostFilters = self.config.ghostFilters.split("^")
         self.log.info("Ghost filters: %s" % ghostFilters)
 
         # print ref.schema.getOrderedNames()
