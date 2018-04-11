@@ -5,63 +5,13 @@ datasets:
   # lsst.afw.image.ExposureF objects.  Once that works, we should be able to
   # run slightly-modified versions of the regular LSST tasks to process them
   # into a form suitable for coaddition.
-  external_detrended:
-    template: 'external/%(camera)s/%(filter)s/detrended-%(visit)07d-%(ccd)03d.fits'
+  external:
+    template: 'external/%(visit)07d-%(ccd)03d.fits'
     persistable: ExposureF
     # This is not actually a catalog; this is a small hack to tell the Butler
-    # to call ExternalImage.readFits() (which we can make do whatever we want)
+    # to call ExternalImage.readFits() (which we can make do whatever we want).
+    # We will need to find a way to encode the true camera in the visit number
+    # in a way that will avoid conflicts with actual HSC visit numbers and
+    # allow us to determine the camera from this number later.
     storage: FitsCatalogStorage
     python: hsc.importExtData.ExternalImage
-
-# The remainder of the datasets in this file are just external_ versions of the
-# normal processCcd.py outputs.
-
-  external_postISRCCD:
-    template: 'external/%(camera)s/%(filter)s/postISRCCD-%(visit)07d-%(ccd)03d.fits'
-    persistable: ExposureF
-    storage: FitsStorage
-    python: lsst.afw.image.ExposureF
-  external_icSrc:
-    template: 'external/%(camera)s/%(filter)s/icSrc-%(visit)07d-%(ccd)03d.fits'
-    persistable: SourceCatalog
-    storage: FitsCatalogStorage
-    python: lsst.afw.table.SourceCatalog
-  external_icExpBackground:
-    template: 'external/%(camera)s/%(filter)s/icExpBackground-%(visit)07d-%(ccd)03d.fits'
-    persistable: PurePythonClass
-    storage: FitsCatalogStorage
-    python: lsst.afw.math.BackgroundList
-    tables: raw
-  external_src:
-    template: 'external/%(camera)s/%(filter)s/src-%(visit)07d-%(ccd)03d.fits'
-    persistable: SourceCatalog
-    storage: FitsCatalogStorage
-    python: lsst.afw.table.SourceCatalog
-  external_calexpBackground:
-    template: 'external/%(camera)s/%(filter)s/calexpBackground-%(visit)07d-%(ccd)03d.fits'
-    persistable: PurePythonClass
-    storage: FitsCatalogStorage
-    python: lsst.afw.math.BackgroundList
-    tables: raw
-  external_srcMatch:
-    template: 'external/%(camera)s/%(filter)s/srcMatch-%(visit)07d-%(ccd)03d.fits'
-    persistable: BaseCatalog
-    storage: FitsCatalogStorage
-    python: lsst.afw.table.BaseCatalog
-  external_srcMatchFull:
-    template: 'external/%(camera)s/%(filter)s/srcMatchFull-%(visit)07d-%(ccd)03d.fits'
-    persistable: BaseCatalog
-    storage: FitsCatalogStorage
-    python: lsst.afw.table.BaseCatalog
-
-exposures:
-  external_icExp:
-    template: 'external/%(camera)s/%(filter)s/icExp-%(visit)07d-%(ccd)03d.fits'
-    persistable: SourceCatalog
-    storage: FitsStorage
-    python: lsst.afw.image.ExposureF
-  external_calexp:
-    template: 'external/%(camera)s/%(filter)s/calexp-%(visit)07d-%(ccd)03d.fits'
-    persistable: SourceCatalog
-    storage: FitsStorage
-    python: lsst.afw.image.ExposureF
