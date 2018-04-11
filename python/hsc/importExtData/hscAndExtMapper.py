@@ -2,11 +2,31 @@
 
 from lsst.obs.hsc import HscMapper
 import lsst.afw.image as afwImage
+from lsst.daf.persistence import Policy, RepositoryCfg
 
 class HscAndExtMapper(HscMapper):
     """Provides abstract-physical mapping for HSC + external data"""
 
+    @staticmethod
+    def makeNewConfig(oldConfig):
+        newPolicy = Policy(Policy.defaultPolicyFile("importExtData",
+                                                    "importExtData.yaml",
+                                                    "policy"))
+        return RepositoryCfg(root=oldConfig.root,
+                             mapper=oldConfig.mapper,
+                             mapperArgs=oldConfig.mapperArgs,
+                             parents=oldConfig.parents,
+                             policy=newPolicy)
+
     def __init__(self, **kwargs):
+
+        # Inject new mappings from importExtData's policy file.
+        # This is a bit of a hack; we're pretending these policy entries
+        # come from the configuration inside the repository itself, since
+        # those always override and extend those from the camera's definitions.
+        # Luckily, no one actually uses those per-repository policy entries
+        # for anything else, so this should be safe.
+        kwargs["repositoryCfg"] = self.makeNewConfig(kwargs["repositoryCfg"])
 
         HscMapper.__init__(self, **kwargs)
 
