@@ -36,5 +36,5 @@ if __name__ == "__main__":
     parser.add_argument("root", metavar="ROOT", type=str,
                         help=("Directory that will contain the new repository "
                               "with the new dataset definitions."))
-    parser.parse_args()
-    main(parent=parser.parent, root=parser.root)
+    args = parser.parse_args()
+    main(parent=args.parent, root=args.root)
