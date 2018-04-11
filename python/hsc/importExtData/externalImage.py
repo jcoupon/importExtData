@@ -1,8 +1,12 @@
 import os
+import re
 import numpy as np
 from lsst.afw.geom import Box2I, SkyWcs
 from lsst.afw.image import ExposureF, readMetadata
 from lsst.meas.algorithms import SingleGaussianPsf
+
+
+regex = re.compile(r'external/(?P<visit>\d+)-(?P<ccd>)\.fits')
 
 
 class ExternalImage:
@@ -20,9 +24,13 @@ class ExternalImage:
     @staticmethod
     def readFits(path):
         directory, filename = os.path.split(path)
+        match = regex.match(filename)
+        visit = int(match.group("visit"))
+        ccd = int(match.group("ccd"))
 
-        # Figure out what camera/filter this is by parsing filename,
-        # and customize the code below accordingly.
+        # Figure out what camera/filter this is by looking at the visit,
+        # and customize the code below accordingly.  The real version should
+        # probably call different functions for different cameras.
 
         bbox = Box2I(width, height)
         result = ExposureF(bbox)
