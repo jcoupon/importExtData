@@ -32,6 +32,7 @@ from lsst.pipe.tasks.measurePsf import MeasurePsfTask
 import lsst.daf.base as dafBase
 import lsst.afw.image as afwImage
 import lsst.meas.algorithms as measAlg
+import lsst.meas.base as measBase
 import lsst.afw.table as afwTable
 
 __all__ = ["EmulateHscCoaddTask"]
@@ -92,7 +93,7 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
     )
 
     initialMeasurement = pexConfig.ConfigurableField(
-        target = measAlg.SourceMeasurementTask,
+        target = measBase.SingleFrameMeasurementTask,
         doc = "Initial measurements used to feed PSF determination and aperture correction determination",
     )
 
@@ -125,7 +126,7 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
                 self.measurePsf.psfDeterminer["psfex"].spatialOrder = 2
                 self.measurePsf.psfDeterminer.name = "psfex"
             except ImportError as e:
-                print "WARNING: Unable to use psfex: %s" % e
+                print("WARNING: Unable to use psfex: %s" % e)
                 self.measurePsf.psfDeterminer.name = "pca"
 
 

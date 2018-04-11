@@ -1,3 +1,3 @@
-from emulateHscCoadd import EmulateHscCoaddTask
-from hscAndExtMapper import *
-from createMultiCat import CreateMultiCatTask
+from .emulateHscCoadd import EmulateHscCoaddTask
+from .hscAndExtMapper import *
+from .createMultiCat import CreateMultiCatTask
