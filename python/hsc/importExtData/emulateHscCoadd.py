@@ -92,7 +92,7 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
         doc = "Initial (high-threshold) detection phase for calibration",
     )
 
-    initialMeasurement = pexConfig.ConfigurableField(
+    measurement = pexConfig.ConfigurableField(
         target = measBase.SingleFrameMeasurementTask,
         doc = "Initial measurements used to feed PSF determination and aperture correction determination",
     )
@@ -105,10 +105,10 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
 
         self.detection.includeThresholdMultiplier = 10.0
 
-        self.detection.doFootprintBackground = False
+        # self.detection.doFootprintBackground = False
 
-        self.initialMeasurement.prefix = "initial."
-        self.initialMeasurement.algorithms.names -= ["correctfluxes"]
+        # self.measurement.prefix = "initial."
+        # self.measurement.algorithms.names -= ["correctfluxes"]
 
         if False:
             """
@@ -117,9 +117,9 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
             """
 
             import os
-            self.initialMeasurement.load(os.path.join(os.environ['MEAS_EXTENSIONS_SHAPEHSM_DIR'], 'config', 'enable.py'))
-            #self.initialMeasurement.algorithms["shape.hsm.regauss"].deblendNChild = "deblend.nchild"
-            self.initialMeasurement.slots.shape = "shape.hsm.moments"
+            self.measurement.load(os.path.join(os.environ['MEAS_EXTENSIONS_SHAPEHSM_DIR'], 'config', 'enable.py'))
+            #self.measurement.algorithms["shape.hsm.regauss"].deblendNChild = "deblend.nchild"
+            self.measurement.slots.shape = "shape.hsm.moments"
 
             try:
                 import lsst.meas.extensions.psfex.psfexPsfDeterminer
@@ -130,13 +130,27 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
                 self.measurePsf.psfDeterminer.name = "pca"
 
 
-#        initflags = [self.initialMeasurement.prefix+x
+#        initflags = [self.measurement.prefix+x
 #                     for x in self.measurePsf.starSelector["catalog"].badStarPixelFlags]
 #        self.measurePsf.starSelector["catalog"].badStarPixelFlags.extend(initflags)
 
         # Crashes if > 0.0
         # TODO: implement it
-        self.measurePsf.reserveFraction = 0.0
+        # self.measurePsf.reserveFraction = 0.0
+        self.measurePsf.reserve.fraction #  reserveFraction = 0.0
+
+
+        # self.measurePsf.starSelectorConfig = starSelectorClass.ConfigClass()
+
+        # starSelectorConfig.sourceFluxField = "initial.flux.psf"
+
+        fluxMag0 = pow(10.0, +0.4*self.mag0)
+
+
+        self.measurePsf.starSelector['objectSize'].sourceFluxField = "base_PsfFlux_flux"
+        self.measurePsf.starSelector['objectSize'].fluxMin = fluxMag0 * pow(10.0, -0.4*self.magLim)
+
+
 
 class EmulateHscCoaddTask(CoaddBaseTask):
 
@@ -151,8 +165,9 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         self.algMetadata = dafBase.PropertyList()
 
         self.makeSubtask("detection", schema=self.schema)
-        self.makeSubtask("initialMeasurement", schema=self.schema, algMetadata=self.algMetadata)
-        self.makeSubtask("measurePsf")
+        # self.makeSubtask("measurement", schema=self.schema, algMetadata=self.algMetadata)
+        self.makeSubtask("measurement", schema=self.schema, algMetadata=self.algMetadata)
+        self.makeSubtask("measurePsf", schema=self.schema)
 
     def run(self, patchRef, selectDataList=[]):
         """
@@ -174,6 +189,10 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         # Import reference coadd and records wcs info
         # ---------------------------------------------- #
 
+        # TODO: set it before
+        fluxMag0 = pow(10.0, +0.4*self.config.mag0)
+
+
         coadd    = patchRef.get(self.config.coaddName + "Coadd_calexp")
         skyInfo  = self.getSkyInfo(patchRef)
 
@@ -188,7 +207,6 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         # Create new exposure object and feed with input images
         # ---------------------------------------------- #
 
-        fluxMag0 = pow(10.0, +0.4*self.config.mag0)
 
         if False:
             # for tests
@@ -292,16 +310,11 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
         self.installInitialPsf(exposure)
 
-        starSelectorName = "objectSize"
-        starSelectorClass  = measAlg.starSelectorRegistry.get(starSelectorName)
-        starSelectorConfig = starSelectorClass.ConfigClass()
-
-        starSelectorConfig.sourceFluxField = "initial.flux.psf"
-
-        starSelectorConfig.fluxMin = fluxMag0 * pow(10.0, -0.4*self.config.magLim)
+        # starSelectorName = "objectSize"
+        #starSelectorClass  = measAlg.starSelectorRegistry.get(starSelectorName)
 
 
-        self.measurePsf.starSelector = starSelectorClass(starSelectorConfig)
+        # self.measurePsf.starSelector = starSelectorClass(starSelectorConfig)
 
         # prepare table
         idFactory = afwTable.IdFactory.makeSimple()
@@ -313,7 +326,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         sources = detRet.sources
 
         # measure moments
-        self.initialMeasurement.measure(exposure, sources)
+        self.measurement.measure(sources, exposure)
 
         # measure psf
         psfRet  = self.measurePsf.run(exposure, sources, expId=0, matches=None)
@@ -354,6 +367,17 @@ class EmulateHscCoaddTask(CoaddBaseTask):
             image[1000:2000, 1000:2000] = imageTmp[1000:2000, 1000:2000]
 
 
+        # self.log.info("Writing {0:s}".format(fileOutName))
+        butler = patchRef.butlerSubset.butler
+        dataId = patchRef.dataId.copy()
+        dataId['filter'] = 'VIRCAM-Y'
+        butler.put(exposure, self.config.coaddName + 'Coadd' , dataId)
+
+        # exposure.writeFits(fileOutName)
+
+        return exposure
+
+
         # Write exposure
         if self.config.fileOutName == "":
             if self.config.dirOutName == "" :
@@ -366,7 +390,6 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         else:
             fileOutName = self.config.fileOutName
 
-        self.log.info("Writing {0:s}".format(fileOutName))
 
         self.mkdir_p(os.path.dirname(fileOutName))
         exposure.writeFits(fileOutName)
@@ -406,7 +429,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
         cls = getattr(measAlg, self.config.initialPsf.model + "Psf")
 
-        fwhm = self.config.initialPsf.fwhm / wcs.pixelScale().asArcseconds()
+        fwhm = self.config.initialPsf.fwhm / wcs.getPixelScale().asArcseconds()
         size = self.config.initialPsf.size
         self.log.info("installInitialPsf fwhm=%.2f pixels; size=%d pixels" % (fwhm, size))
         psf = cls(size, size, fwhm/(2*math.sqrt(2*math.log(2))))
