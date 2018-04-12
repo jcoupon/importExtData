@@ -1,12 +1,14 @@
 import os
 import re
-from collections import namedtuple
 import numpy as np
 import sqlite3
 from lsst.afw.geom import Point2I, Extent2I, Box2I, SkyWcs
 from lsst.afw.image import ExposureF, readMetadata
 from lsst.meas.algorithms import SingleGaussianPsf
 from lsst.daf.persistence import Butler
+
+
+__all__ = ("VisitMetadata", "ExternalImage")
 
 
 class VisitMetadata:

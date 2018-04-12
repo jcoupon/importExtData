@@ -3,6 +3,9 @@ from lsst.pipe.base import CmdLineTask, Struct
 from lsst.ip.isr import interpolateFromMask
 
 
+__all__ = ("ExternalIsrConfig", "ExternalIsrTask")
+
+
 class ExternalIsrConfig(Config):
     datasetType = "external"
     maskPlanesToInterpolate = ListField(
