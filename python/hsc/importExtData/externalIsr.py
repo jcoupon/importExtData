@@ -33,6 +33,9 @@ class ExternalIsrTask(CmdLineTask):
     expensive for ExternalImage.readFits.
     """
 
+    ConfigClass = ExternalIsrConfig
+    _DefaultName = "isr"
+
     def runDataRef(self, sensorRef):
         self.log.info("Performing ISR on sensor %s" % (sensorRef.dataId))
         exposure = sensorRef.get(self.config.datasetType)
