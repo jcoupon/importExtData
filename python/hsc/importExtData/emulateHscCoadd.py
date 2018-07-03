@@ -370,7 +370,8 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         # self.log.info("Writing {0:s}".format(fileOutName))
         butler = patchRef.butlerSubset.butler
         dataId = patchRef.dataId.copy()
-        dataId['filter'] = 'VIRCAM-Y'
+        dataId['filter'] = self.config.filtName
+
         butler.put(exposure, self.config.coaddName + 'Coadd' , dataId)
 
         # exposure.writeFits(fileOutName)

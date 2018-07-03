@@ -33,9 +33,12 @@ class HscAndExtMapper(HscMapper):
         # add filters
         afwImage.utils.defineFilter(name='MegaCam-uS', lambdaEff=375, alias=['u1', 'u',])
         afwImage.utils.defineFilter(name='MegaCam-u', lambdaEff=375, alias=['u2',])
-        afwImage.utils.defineFilter(name='VIRCAM-Y', lambdaEff=375, alias=['Y','y',])
+        afwImage.utils.defineFilter(name='VIRCAM-Y', lambdaEff=1021, alias=['Y','y',])
+        afwImage.utils.defineFilter(name='VIRCAM-J', lambdaEff=1254, alias=['J','j',])
+        afwImage.utils.defineFilter(name='VIRCAM-H', lambdaEff=1646, alias=['H','h',])
+        afwImage.utils.defineFilter(name='VIRCAM-Ks', lambdaEff=2149, alias=['Ks','k',])
 
-        for f in ['MegaCam-uS', 'MegaCam-u', 'VIRCAM-Y']:
+        for f in ['MegaCam-uS', 'MegaCam-u', 'VIRCAM-Y', 'VIRCAM-J', 'VIRCAM-H', 'VIRCAM-Ks']:
             self.filters[f] = afwImage.Filter(afwImage.Filter(f).getId()).getName()
 
         #print dir(afwImage.Filter("HSC-G"))
