@@ -24,7 +24,9 @@ Command to emulate an image and a variance image into a LSST exposure object.
 # Options
 
 `imgInName`: name of input image (default: "")
+
 `mskInName`: name of input mask, (default: "")
+
 `varInName`: name of input variance image, (default: "")
 
 `weight`: set if variance file is weight (default: False)
@@ -32,6 +34,7 @@ Command to emulate an image and a variance image into a LSST exposure object.
 `test`: output LSST-made images (default: False)
 
 `mag0`: magnitude AB zero point (default: 27)
+
 `magLim`: Magnitude faint limit for PSF measurement (default: 23)
 
 # Coadd base options
