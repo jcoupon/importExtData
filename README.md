@@ -15,7 +15,7 @@ cd -
 ```
 
 If not present, the `data/_mapper` file must be put in `ROOT/`
-and the `data/skyMap.pickle` file in `ROOT/rerun/RERUN/deepCoadd/`.
+and the `data/skyMap.pickle` file in `ROOT/deepCoadd/`.
 
 ## emulateHscCoadd.py
 
