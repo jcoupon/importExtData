@@ -263,15 +263,19 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         cellSet = psfRet.cellSet
         psf = psfRet.psf
 
-        display = False
-        if display:
+        displayPsf = False
+        if displayPsf:
             measAlg.utils.showPsf(psf, frame=1)
+            sigma = psf.computeShape().getDeterminantRadius()
+            print(sigma)
 
-            # seems to be broken
+            # seems to be broken (?)
             # measAlg.utils.showPsfMosaic(exposure, psf, frame=1, showFwhm=True)
 
         # set PSF
         exposure.setPsf(psf)
+
+
 
         # ---------------------------------------------- #
         # write exposure
