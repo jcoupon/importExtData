@@ -96,12 +96,6 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
 
     measurePsf = pexConfig.ConfigurableField(target = MeasurePsfTask, doc = "")
 
-
-    # mskInRef = pexConfig.Field("Use mask image from reference image", bool, False)
-    # fileOutName = pexConfig.Field("Name of output file", str, "")
-    # dirOutName  = pexConfig.Field("Name of output directory (will write output files as dirOutName/FILTER/TRACT/PATCH.fits)", str, "")
-
-
     def setDefaults(self):
 
         pexConfig.Config.setDefaults(self)
@@ -271,8 +265,10 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
         display = False
         if display:
-            measAlg.utils.showPsfMosaic(exposure, psf, frame=1)
-            #measAlg.utils.showPsfMosaic(coadd, coadd.getPsf(), frame=1)
+            measAlg.utils.showPsf(psf, frame=1)
+
+            # seems to be broken
+            # measAlg.utils.showPsfMosaic(exposure, psf, frame=1, showFwhm=True)
 
         # set PSF
         exposure.setPsf(psf)
