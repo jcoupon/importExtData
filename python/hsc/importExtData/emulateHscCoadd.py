@@ -239,8 +239,24 @@ class EmulateHscCoaddTask(CoaddBaseTask):
             # nopatchRefNotSet = mskIn.getArray()[:]&(1<<noDataBit) == 0
             mskIn.getArray()[noDataIn] += 2**noDataBit
 
-            mskIn.addMaskPlane('CLIPPED')
+            # --------------------------------------------- #
+            # add bright object mask
+            # --------------------------------------------- #
 
+            if self.config.doMaskBrightObjects:
+                brightObjectMasks = self.readBrightObjectMasks(
+                    patchRef)
+                self.setBrightObjectMasks(
+                    exposure, patchRef.dataId, brightObjectMasks)
+
+            # needed for multiband
+            mskIn.addMaskPlane('CLIPPED')
+            mskIn.addMaskPlane('CROSSTALK')
+            mskIn.addMaskPlane('INEXACT_PSF')
+            mskIn.addMaskPlane('NOT_DEBLENDED')
+            mskIn.addMaskPlane('REJECTED')
+            mskIn.addMaskPlane('SENSOR_EDGE')
+            mskIn.addMaskPlane('UNMASKEDNAN')
 
         # --------------------------------------------- #
         # create exposure
@@ -268,15 +284,6 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         calib.setFluxMag0(fluxMag0)
         exposure.setCalib(calib)
 
-        # --------------------------------------------- #
-        # add bright object mask
-        # --------------------------------------------- #
-
-        if self.config.doMaskBrightObjects:
-            brightObjectMasks = self.readBrightObjectMasks(
-                patchRef)
-            self.setBrightObjectMasks(
-                exposure, patchRef.dataId, brightObjectMasks)
 
 
 
