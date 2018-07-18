@@ -159,6 +159,8 @@ class EmulateHscCoaddTask(CoaddBaseTask):
             del mask
 
 
+
+
     def run(self, patchRef, selectDataList=[]):
         """ Task to import external data and transform
         it into LSST exposure object. The task also
@@ -237,6 +239,9 @@ class EmulateHscCoaddTask(CoaddBaseTask):
             # nopatchRefNotSet = mskIn.getArray()[:]&(1<<noDataBit) == 0
             mskIn.getArray()[noDataIn] += 2**noDataBit
 
+            mskIn.addMaskPlane('CLIPPED')
+
+
         # --------------------------------------------- #
         # create exposure
         # --------------------------------------------- #
@@ -272,6 +277,8 @@ class EmulateHscCoaddTask(CoaddBaseTask):
                 patchRef)
             self.setBrightObjectMasks(
                 exposure, patchRef.dataId, brightObjectMasks)
+
+
 
         # ---------------------------------------------- #
         # Do PSF measurement on coadd
