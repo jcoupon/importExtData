@@ -31,6 +31,7 @@ from lsst.pipe.tasks.measurePsf import MeasurePsfTask
 
 import lsst.daf.base as dafBase
 import lsst.afw.image as afwImage
+import lsst.afw.geom as afwGeom
 import lsst.meas.algorithms as measAlg
 import lsst.meas.base as measBase
 import lsst.afw.table as afwTable
