@@ -35,6 +35,8 @@ import lsst.meas.algorithms as measAlg
 import lsst.meas.base as measBase
 import lsst.afw.table as afwTable
 
+
+
 __all__ = ["EmulateHscCoaddTask"]
 
 
@@ -96,6 +98,20 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
 
     measurePsf = pexConfig.ConfigurableField(target = MeasurePsfTask, doc = "")
 
+    #
+    # N.b. These configuration options only set the bitplane config.brightObjectMaskName
+    # To make this useful you *must* also configure the flags.pixel algorithm, for example
+    # by adding
+    #   config.measurement.plugins["base_PixelFlags"].masksFpCenter.append("BRIGHT_OBJECT")
+    #   config.measurement.plugins["base_PixelFlags"].masksFpAnywhere.append("BRIGHT_OBJECT")
+    # to your measureCoaddSources.py and forcedPhotCoadd.py config overrides
+    #
+    doMaskBrightObjects = pexConfig.Field(dtype=bool, default=True,
+                                          doc="Set mask and flag bits for bright objects?")
+    brightObjectMaskName = pexConfig.Field(dtype=str, default="BRIGHT_OBJECT",
+                                           doc="Name of mask bit used for bright objects")
+
+
     def setDefaults(self):
 
         pexConfig.Config.setDefaults(self)
@@ -130,6 +146,16 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         self.makeSubtask(
             "measurement", schema=self.schema, algMetadata=self.algMetadata)
         self.makeSubtask("measurePsf", schema=self.schema)
+
+        if self.config.doMaskBrightObjects:
+            mask = afwImage.Mask()
+            try:
+                self.brightObjectBitmask = 1 << mask.addMaskPlane(self.config.brightObjectMaskName)
+            except pexExceptions.LsstCppException:
+                raise RuntimeError(
+                    "Unable to define mask plane for bright objects; \
+                    planes used are %s" % mask.getMaskPlaneDict().keys())
+            del mask
 
 
     def run(self, patchRef, selectDataList=[]):
@@ -210,7 +236,6 @@ class EmulateHscCoaddTask(CoaddBaseTask):
             # nopatchRefNotSet = mskIn.getArray()[:]&(1<<noDataBit) == 0
             mskIn.getArray()[noDataIn] += 2**noDataBit
 
-
         # --------------------------------------------- #
         # create exposure
         # --------------------------------------------- #
@@ -236,6 +261,16 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         calib = afwImage.Calib()
         calib.setFluxMag0(fluxMag0)
         exposure.setCalib(calib)
+
+        # --------------------------------------------- #
+        # add bright object mask
+        # --------------------------------------------- #
+
+        if self.config.doMaskBrightObjects:
+            brightObjectMasks = self.readBrightObjectMasks(
+                patchRef)
+            self.setBrightObjectMasks(
+                exposure, patchRef.dataId, brightObjectMasks)
 
         # ---------------------------------------------- #
         # Do PSF measurement on coadd
@@ -275,15 +310,12 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         # set PSF
         exposure.setPsf(psf)
 
-
-
         # ---------------------------------------------- #
         # write exposure
         # ---------------------------------------------- #
 
         butler = patchRef.butlerSubset.butler
         butler.put(exposure, self.config.coaddName + 'Coadd' , patchRef.dataId)
-
 
         return exposure
 
@@ -323,6 +355,86 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         self.log.info("installInitialPsf fwhm=%.2f pixels; size=%d pixels" % (fwhm, size))
         psf = cls(size, size, fwhm/(2*math.sqrt(2*math.log(2))))
         exposure.setPsf(psf)
+
+    def readBrightObjectMasks(self, dataRef):
+        """Returns None on failure
+
+
+        # ---------------------------------------------- #
+
+        copied from AssembleCoaddTask. To be implemented so that it
+        can be imported more easily
+
+        see https://jira.lsstcorp.org/browse/DM-15030
+
+        # ---------------------------------------------- #
+
+        """
+
+        try:
+            return dataRef.get("brightObjectMask", immediate=True)
+        except Exception as e:
+            self.log.warn(
+                "Unable to read brightObjectMask for %s: %s", dataRef.dataId, e)
+            return None
+
+    def setBrightObjectMasks(self, exposure, dataId, brightObjectMasks):
+        """Set the bright object masks
+
+        exposure:          Exposure under consideration
+        dataId:            Data identifier dict for patch
+        brightObjectMasks: afwTable of bright objects to mask
+
+        # ---------------------------------------------- #
+
+        copied from AssembleCoaddTask. To be implemented so that it
+        can be imported more easily
+
+        see https://jira.lsstcorp.org/browse/DM-15030
+
+        # ---------------------------------------------- #
+
+        """
+        #
+        # Check the metadata specifying the tract/patch/filter
+        #
+        if brightObjectMasks is None:
+            self.log.warn("Unable to apply bright object mask: none supplied")
+            return
+        self.log.info("Applying %d bright object masks to %s", len(brightObjectMasks), dataId)
+        md = brightObjectMasks.table.getMetadata()
+        for k in dataId:
+            if not md.exists(k):
+                self.log.warn("Expected to see %s in metadata", k)
+            else:
+                if md.get(k) != dataId[k]:
+                    self.log.warn("Expected to see %s == %s in metadata, saw %s", k, md.get(k), dataId[k])
+
+        mask = exposure.getMaskedImage().getMask()
+        wcs = exposure.getWcs()
+        plateScale = wcs.getPixelScale().asArcseconds()
+
+        for rec in brightObjectMasks:
+            center = afwGeom.PointI(wcs.skyToPixel(rec.getCoord()))
+            if rec["type"] == "box":
+                assert rec["angle"] == 0.0, ("Angle != 0 for mask object %s" % rec["id"])
+                width = rec["width"].asArcseconds()/plateScale    # convert to pixels
+                height = rec["height"].asArcseconds()/plateScale  # convert to pixels
+
+                halfSize = afwGeom.ExtentI(0.5*width, 0.5*height)
+                bbox = afwGeom.Box2I(center - halfSize, center + halfSize)
+
+                bbox = afwGeom.BoxI(afwGeom.PointI(int(center[0] - 0.5*width), int(center[1] - 0.5*height)),
+                                    afwGeom.PointI(int(center[0] + 0.5*width), int(center[1] + 0.5*height)))
+                spans = afwGeom.SpanSet(bbox)
+            elif rec["type"] == "circle":
+                radius = int(rec["radius"].asArcseconds()/plateScale)   # convert to pixels
+                spans = afwGeom.SpanSet.fromShape(radius, offset=center)
+            else:
+                self.log.warn("Unexpected region type %s at %s" % rec["type"], center)
+                continue
+            spans.clippedTo(mask.getBBox()).setMask(mask, self.brightObjectBitmask)
+
 
 
     # Overload these if your task inherits from CmdLineTask
