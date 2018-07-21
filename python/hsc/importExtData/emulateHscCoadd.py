@@ -28,6 +28,8 @@ import lsst.pex.config as pexConfig
 from lsst.pipe.tasks.coaddBase import CoaddBaseTask
 from lsst.pipe.tasks.calibrate import CalibrateTask
 from lsst.pipe.tasks.measurePsf import MeasurePsfTask
+from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
+
 
 import lsst.daf.base as dafBase
 import lsst.afw.image as afwImage
@@ -113,6 +115,19 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
                                            doc="Name of mask bit used for bright objects")
 
 
+
+    charImage = pexConfig.ConfigurableField(
+        target=CharacterizeImageTask,
+        doc="""Task to characterize a science exposure:
+            - detect sources, usually at high S/N
+            - estimate the background, which is subtracted from the image and returned as field "background"
+            - estimate a PSF model, which is added to the exposure
+            - interpolate over defects and cosmic rays, updating the image, variance and mask planes
+            """,
+    )
+
+
+
     def setDefaults(self):
 
         pexConfig.Config.setDefaults(self)
@@ -131,6 +146,10 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
         self.measurePsf.starSelector['objectSize'].fluxMin = \
             fluxMag0 * pow(10.0, -0.4*self.magLim)
 
+        self.charImage.measurePsf.starSelector['objectSize'].fluxMin = \
+            fluxMag0 * pow(10.0, -0.4*self.magLim)
+
+
 class EmulateHscCoaddTask(CoaddBaseTask):
 
     ConfigClass  = EmulateHscCoaddConfig
@@ -147,6 +166,8 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         self.makeSubtask(
             "measurement", schema=self.schema, algMetadata=self.algMetadata)
         self.makeSubtask("measurePsf", schema=self.schema)
+        self.makeSubtask("charImage")
+
 
         if self.config.doMaskBrightObjects:
             mask = afwImage.Mask()
@@ -231,14 +252,13 @@ class EmulateHscCoaddTask(CoaddBaseTask):
             # set NO_DATA bit to mask
             # where noDataIn
             mask_labels = mskIn.getMaskPlaneDict()
-            print(mask_labels)
+            self.log.info("Mask labels:".format(mask_labels))
             noDataBit = mask_labels["NO_DATA"]
 
             # check if not already set in ref mask
             # (no longer used)
             # nopatchRefNotSet = mskIn.getArray()[:]&(1<<noDataBit) == 0
             mskIn.getArray()[noDataIn] += 2**noDataBit
-
 
             # needed for multiband
             mskIn.addMaskPlane('CLIPPED')
@@ -275,7 +295,6 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         calib.setFluxMag0(fluxMag0)
         exposure.setCalib(calib)
 
-
         # --------------------------------------------- #
         # add bright object mask
         # --------------------------------------------- #
@@ -291,39 +310,43 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         # Do PSF measurement on coadd
         # ---------------------------------------------- #
 
-        self.log.info("Measuring PSF")
+        results = self.charImage.characterize(exposure)
+        exposure = results.exposure
 
-        self.installInitialPsf(exposure)
+        if False:
+            self.log.info("Measuring PSF")
 
-        # prepare table
-        idFactory = afwTable.IdFactory.makeSimple()
-        table = afwTable.SourceTable.make(self.schema, idFactory)
-        table.setMetadata(self.algMetadata)
+            self.installInitialPsf(exposure)
 
-        # detect sources
-        detRet = self.detection.makeSourceCatalog(table, exposure)
-        sources = detRet.sources
+            # prepare table
+            idFactory = afwTable.IdFactory.makeSimple()
+            table = afwTable.SourceTable.make(self.schema, idFactory)
+            table.setMetadata(self.algMetadata)
 
-        # measure moments
-        self.measurement.measure(sources, exposure)
+            # detect sources
+            detRet = self.detection.makeSourceCatalog(table, exposure)
+            sources = detRet.sources
 
-        # measure psf
-        psfRet = self.measurePsf.run(exposure, sources, expId=0, matches=None)
+            # measure moments
+            self.measurement.measure(sources, exposure)
 
-        cellSet = psfRet.cellSet
-        psf = psfRet.psf
+            # measure psf
+            psfRet = self.measurePsf.run(exposure, sources, expId=0, matches=None)
 
-        displayPsf = False
-        if displayPsf:
-            measAlg.utils.showPsf(psf, frame=1)
-            sigma = psf.computeShape().getDeterminantRadius()
-            print(sigma)
+            cellSet = psfRet.cellSet
+            psf = psfRet.psf
 
-            # seems to be broken (?)
-            # measAlg.utils.showPsfMosaic(exposure, psf, frame=1, showFwhm=True)
+            displayPsf = False
+            if displayPsf:
+                measAlg.utils.showPsf(psf, frame=1)
+                sigma = psf.computeShape().getDeterminantRadius()
+                print(sigma)
 
-        # set PSF
-        exposure.setPsf(psf)
+                # seems to be broken (?)
+                # measAlg.utils.showPsfMosaic(exposure, psf, frame=1, showFwhm=True)
+
+            # set PSF
+            exposure.setPsf(psf)
 
         # ---------------------------------------------- #
         # write exposure
