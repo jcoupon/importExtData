@@ -44,9 +44,9 @@ multiBandDriver.py $ROOTDIR --rerun=emulate_test:emulate_test \
 
 The `debug` version only keeps a fewer number of detections to speed up the tests.
 
-# How to add a new filter?
+### How to add a new filter?
 
-## Mapper
+#### Mapper
 
 Edit `python/hsc/importExtData/hscAndExtMapper.py`. For example:
 
@@ -56,7 +56,7 @@ for f in [ ..., 'MegaCam-uS']:
             self.filters[f] = afwImage.Filter(afwImage.Filter(f).getId()).getName()
 ```
 
-## Filter mapping
+#### Filter mapping
 
 The filter mapping helps to match the sources to the reference sources involved in the (astormetric and photometric) calibration. Note that if no re-calibration is run during the `emulateHscCoadd` phase, alternatively, `  --config measureCoaddSources.doMatchSources=False` can probably be set during the multiband process (not tested).
 
@@ -85,7 +85,7 @@ config.measureCoaddSources.match.refObjLoader.load(
     os.path.join(os.environ["IMPORTEXTDATA_DIR"], "config", "MegaCam", "filterMap.py"))
 ```
 
-## Filter priority list
+#### Filter priority list
 
 Also in the `multiBandDriver.py` config file, update the filter priority list for `mergeCoaddDetections` and `mergeCoaddMeasurements` config. For example:
 
@@ -98,7 +98,7 @@ config.mergeCoaddDetections.priorityList=[
     ]
 ```
 
-# Options
+### Options
 
 `imgInName`: name of input image (default: "")
 
@@ -116,7 +116,7 @@ config.mergeCoaddDetections.priorityList=[
 
 `charImage_package`: Package to load the charImage config from (default: obs_subaru)
 
-# Coadd base options
+### Coadd base options
 
 
 ```
@@ -185,7 +185,7 @@ Notes:
 
 ```
 
-## Full procedure to add external data
+### Full procedure to add external data
 
 ![alt text](https://github.com/jcoupon/importExtData/blob/master/doc/doc.001.png)
 ![alt text](https://github.com/jcoupon/importExtData/blob/master/doc/doc.002.png)
