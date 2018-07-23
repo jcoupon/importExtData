@@ -217,9 +217,6 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
         for flux in fluxList:
             config.applyApCorr.proxies["undeblended_" + flux] = flux
 
-
-
-
 class EmulateHscCoaddTask(CoaddBaseTask):
 
     ConfigClass  = EmulateHscCoaddConfig
@@ -234,7 +231,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
         self.makeSubtask("charImage")
 
-        # we don't perform any calibration
+        # we don't perform any calibration (yet)
         #self.makeSubtask("calibrate")
 
         if self.config.doMaskBrightObjects:
@@ -550,10 +547,6 @@ class EmulateHscCoaddTask(CoaddBaseTask):
                 self.log.warn("Unexpected region type %s at %s" % rec["type"], center)
                 continue
             spans.clippedTo(mask.getBBox()).setMask(mask, self.brightObjectBitmask)
-
-
-
-
 
     # Overload these if your task inherits from CmdLineTask
     def _getConfigName(self):
