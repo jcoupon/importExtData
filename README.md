@@ -59,7 +59,7 @@ for f in ['MegaCam-uS']:
 
 ## Filter mapping
 
-The filter mapping helps to match the sources to the reference sources involved in the (astormetric and photometric) calibration. Note that if no re-calibration is run during the `emulateHscCoadd` phase, alternatively, `  --config measureCoaddSources.doMatchSources=False` can probably be set during the multiband process as well (not tested).
+The filter mapping helps to match the sources to the reference sources involved in the (astormetric and photometric) calibration. Note that if no re-calibration is run during the `emulateHscCoadd` phase, alternatively, `  --config measureCoaddSources.doMatchSources=False` can probably be set during the multiband process (not tested).
 
 Create a new directory in `config` with the name of the camera and add the filter mapping to the reference objects:
 
@@ -88,7 +88,7 @@ config.measureCoaddSources.match.refObjLoader.load(
 
 ## Filter priority list
 
-Also in the `multiBAndDriver.py` config file, update the filter priority list for `mergeCoaddDetections` and `mergeCoaddMeasurements` config. For example:
+Also in the `multiBandDriver.py` config file, update the filter priority list for `mergeCoaddDetections` and `mergeCoaddMeasurements` config. For example:
 
 ```python
 config.mergeCoaddDetections.priorityList=[
