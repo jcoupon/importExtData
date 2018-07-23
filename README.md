@@ -19,7 +19,87 @@ and the `data/skyMap.pickle` file in `ROOT/deepCoadd/`.
 
 ## emulateHscCoadd.py
 
-Command to emulate an image and a variance image into a LSST exposure object.
+Command to emulate an image and a variance image into a LSST exposure object. For example:
+
+```shell
+emulateHscCoadd.py $ROOTDIR --rerun=$DIR_RERUN \
+	--id tract=$TRACT patch=$PATCH filter=$FILTER \
+	--config imgInName=$IMAGE varInName=$WEIGHT mag0=30.0 weight=True
+```
+
+Which must be followed by the detection step (if not run during the multiBand process):
+
+```shell
+detectCoaddSources.py $ROOTDIR --rerun=$DIR_RERUN:$DIR_RERUN
+  	--id tract=$TRACT patch=$PATCH filter=$FILTER
+```
+
+And finally, when running `multiBandDriver.py`, the corresponding config file must be loaded:
+
+```shell
+multiBandDriver.py $ROOTDIR --rerun=emulate_test:emulate_test \
+	--id tract=$TRACT patch=$PATCH filter=$FILTER  \
+	--clobber-config --no-versions \
+	--nodes 1 --procs 1 --do-exec \
+	-C $IMPORTEXTDATA/config/multiBandDriver[_debug].py
+
+```
+
+The `debug` version only keeps a fewer number of detections to speed up the tests.
+
+# How to add a new filter?
+
+## Mapper
+
+Edit `python/hsc/importExtData/hscAndExtMapper.py`. For example:
+
+```python
+afwImage.utils.defineFilter(name='MegaCam-uS', lambdaEff=375, alias=['u1', 'u',])
+for f in ['MegaCam-uS']:
+            self.filters[f] = afwImage.Filter(afwImage.Filter(f).getId()).getName()
+```
+
+## Filter mapping
+
+The filter mapping helps to match the sources to the reference sources involved in the (astormetric and photometric) calibration. Note that if no re-calibration is run during the `emulateHscCoadd` phase, alternatively, `  --config measureCoaddSources.doMatchSources=False` can probably be set during the multiband process as well (not tested).
+
+Create a new directory in `config` with the name of the camera and add the filter mapping to the reference objects:
+
+```shell
+mkdir config/MegaCam
+touch config/MegaCam/filterMap.py 
+```
+
+And edit `config/MegaCam/filterMap.py`:
+
+```python
+for source, target in [
+        ("MegaCam-u", 'g'),
+        ("MegaCam-uS", 'g'),
+    ]:
+    config.filterMap[source] = target
+
+```
+
+Finally, add the filter map in the `multiBAndDriver.py` config file:
+
+```python
+config.measureCoaddSources.match.refObjLoader.load(
+    os.path.join(os.environ["IMPORTEXTDATA_DIR"], "config", "MegaCam", "filterMap.py"))
+```
+
+## Filter priority list
+
+Also in the `multiBAndDriver.py` config file, update the filter priority list for `mergeCoaddDetections` and `mergeCoaddMeasurements` config. For example:
+
+```python
+config.mergeCoaddDetections.priorityList=[
+    "HSC-I2", "HSC-I", "HSC-R2", "HSC-R", "HSC-Z", "HSC-Y", "HSC-G",
+    "MegaCam-u", "MegaCam-uS",
+    "VIRCAM-Y", "VIRCAM-J", "VIRCAM-H", "VIRCAM-Ks",
+    "NB0921", "NB0816", "NB1010", "NB0387", "NB0515",
+    ]
+```
 
 # Options
 
@@ -36,6 +116,8 @@ Command to emulate an image and a variance image into a LSST exposure object.
 `mag0`: magnitude AB zero point (default: 27)
 
 `magLim`: Magnitude faint limit for PSF measurement (default: 23)
+
+`charImage_package`: Package to load the charImage config from (default: obs_subaru)
 
 # Coadd base options
 
