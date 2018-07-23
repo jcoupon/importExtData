@@ -40,7 +40,6 @@ And finally, when running `multiBandDriver.py`, the corresponding config file mu
 multiBandDriver.py $ROOTDIR --rerun=emulate_test:emulate_test \
 	--id tract=$TRACT patch=$PATCH filter=$FILTER  \
 	-C $IMPORTEXTDATA/config/multiBandDriver[_debug].py
-
 ```
 
 The `debug` version only keeps a fewer number of detections to speed up the tests.
@@ -53,7 +52,7 @@ Edit `python/hsc/importExtData/hscAndExtMapper.py`. For example:
 
 ```python
 afwImage.utils.defineFilter(name='MegaCam-uS', lambdaEff=375, alias=['u1', 'u',])
-for f in ['MegaCam-uS']:
+for f in [ ..., 'MegaCam-uS']:
             self.filters[f] = afwImage.Filter(afwImage.Filter(f).getId()).getName()
 ```
 
