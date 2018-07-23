@@ -30,7 +30,6 @@ from lsst.pipe.tasks.calibrate import CalibrateTask
 from lsst.pipe.tasks.measurePsf import MeasurePsfTask
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
 
-
 import lsst.daf.base as dafBase
 import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
@@ -38,68 +37,106 @@ import lsst.meas.algorithms as measAlg
 import lsst.meas.base as measBase
 import lsst.afw.table as afwTable
 
-
-
 __all__ = ["EmulateHscCoaddTask"]
 
-
-class InitialPsfConfig(pexConfig.Config):
-    """Describes the initial PSF used for detection
-    and measurement before we do PSF determination."""
-
-    model = pexConfig.ChoiceField(
-        dtype = str,
-        doc = "PSF model type",
-        default = "SingleGaussian",
-        allowed = {
-            "SingleGaussian": "Single Gaussian model",
-            "DoubleGaussian": "Double Gaussian model",
-        },
-    )
-    fwhm = pexConfig.Field(
-        dtype = float,
-        doc = "FWHM of PSF model (arcsec)",
-        default = 1.0,
-    )
-    size = pexConfig.Field(
-        dtype = int,
-        doc = "Size of PSF model (pixels)",
-        default = 15,
-    )
+# no longer used
+#class InitialPsfConfig(pexConfig.Config):
+#    """Describes the initial PSF used for detection
+#    and measurement before we do PSF determination."""
+#
+#    model = pexConfig.ChoiceField(
+#        dtype = str,
+#        doc = "PSF model type",
+#        default = "SingleGaussian",
+#        allowed = {
+#            "SingleGaussian": "Single Gaussian model",
+#            "DoubleGaussian": "Double Gaussian model",
+#        },
+#    )
+#    fwhm = pexConfig.Field(
+#        dtype = float,
+#        doc = "FWHM of PSF model (arcsec)",
+#        default = 1.0,
+#    )
+#    size = pexConfig.Field(
+#        dtype = int,
+#        doc = "Size of PSF model (pixels)",
+#        default = 15,
+#    )
 
 
 class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
     """Config for EmulateHscCoaddTask
     """
 
+    # input image, mask (optional) and variance fits files
     imgInName = pexConfig.Field("Name of input image", str, "")
     mskInName = pexConfig.Field("Name of input mask", str, "")
     varInName = pexConfig.Field("Name of input variance image", str, "")
 
+    # if input is a weight image, it will take the inverse
     weight = pexConfig.Field("Set if variance file is weight", bool, False)
 
+    # used for tests only
     test = pexConfig.Field("Output", bool, False)
 
+    # mag zero point of the input data image
     mag0 = pexConfig.Field("Magnitude zero point", float, 27.0)
+
+    # used for the PSF measurement
     magLim = pexConfig.Field(
         "Magnitude faint limit for PSF measurement", float, 23.0)
 
-    # filtName = pexConfig.Field("Filter name", str, None)
+    # used for the PSF measurement
+    charImage_package = pexConfig.Field(
+        "Package to load the charImage config from (default: obs_subaru)",
+        str, "obs_subaru")
 
-    initialPsf = pexConfig.ConfigField(
-        dtype=InitialPsfConfig, doc=InitialPsfConfig.__doc__)
 
-    detection  = pexConfig.ConfigurableField(
-        target=measAlg.SourceDetectionTask,
-        doc="Initial (high-threshold) detection phase for calibration",
+    # config for the tasks we will call to get PSF and aperture corrections
+    charImage = pexConfig.ConfigurableField(
+        target=CharacterizeImageTask,
+        doc="""Task to characterize a science exposure:
+            - detect sources, usually at high S/N
+            - estimate the background, which is subtracted
+                from the image and returned as field "background"
+            - estimate a PSF model, which is added to the exposure
+            - interpolate over defects and cosmic rays, updating the
+                image, variance and mask planes
+            """,
     )
 
-    measurement = pexConfig.ConfigurableField(
-        target=measBase.SingleFrameMeasurementTask,
-        doc="Initial measurements used to feed PSF determination and aperture correction determination",
+    # this is not currently used, but we configure it so that we can call
+    # the processCcd config directly
+    calibrate = pexConfig.ConfigurableField(
+        target=CalibrateTask,
+        doc="""Task to perform astrometric and photometric calibration:
+            - refine the WCS in the exposure
+            - refine the Calib photometric calibration object in the exposure
+            - detect sources, usually at low S/N
+            """,
     )
 
-    measurePsf = pexConfig.ConfigurableField(target = MeasurePsfTask, doc = "")
+    # bright mask stuff
+    doMaskBrightObjects = pexConfig.Field(
+        dtype=bool, default=True,
+        doc="Set mask and flag bits for bright objects?")
+    brightObjectMaskName = pexConfig.Field(
+        dtype=str, default="BRIGHT_OBJECT",
+          doc="Name of mask bit used for bright objects")
+
+    # no longer used
+    #initialPsf = pexConfig.ConfigField(
+    #    dtype=InitialPsfConfig, doc=InitialPsfConfig.__doc__)
+    #detection  = pexConfig.ConfigurableField(
+    #    target=measAlg.SourceDetectionTask,
+    #    doc="Initial (high-threshold) detection phase for calibration",
+    #)
+    #measurement = pexConfig.ConfigurableField(
+    #    target=measBase.SingleFrameMeasurementTask,
+    #    doc="Initial measurements used to feed PSF determination and aperture correction determination",
+    #)
+    # measurePsf = pexConfig.ConfigurableField(target = MeasurePsfTask, doc = "")
 
     #
     # N.b. These configuration options only set the bitplane config.brightObjectMaskName
@@ -109,45 +146,78 @@ class EmulateHscCoaddConfig(CoaddBaseTask.ConfigClass):
     #   config.measurement.plugins["base_PixelFlags"].masksFpAnywhere.append("BRIGHT_OBJECT")
     # to your measureCoaddSources.py and forcedPhotCoadd.py config overrides
     #
-    doMaskBrightObjects = pexConfig.Field(dtype=bool, default=True,
-                                          doc="Set mask and flag bits for bright objects?")
-    brightObjectMaskName = pexConfig.Field(dtype=str, default="BRIGHT_OBJECT",
-                                           doc="Name of mask bit used for bright objects")
-
-
-
-    charImage = pexConfig.ConfigurableField(
-        target=CharacterizeImageTask,
-        doc="""Task to characterize a science exposure:
-            - detect sources, usually at high S/N
-            - estimate the background, which is subtracted from the image and returned as field "background"
-            - estimate a PSF model, which is added to the exposure
-            - interpolate over defects and cosmic rays, updating the image, variance and mask planes
-            """,
-    )
-
 
 
     def setDefaults(self):
 
         pexConfig.Config.setDefaults(self)
 
-        self.detection.includeThresholdMultiplier = 10.0
-
-        # self.detection.doFootprintBackground = False
-
-        # self.measurePsf.reserve.fraction = 0.0
-        self.measurePsf.reserve.fraction = 0.2
 
         fluxMag0 = pow(10.0, +0.4*self.mag0)
 
+        """
         self.measurePsf.starSelector['objectSize'].sourceFluxField = \
             "base_PsfFlux_flux"
         self.measurePsf.starSelector['objectSize'].fluxMin = \
             fluxMag0 * pow(10.0, -0.4*self.magLim)
+        """
+
+        # self.charImage.measurement.plugins.names.add("ext_convolved_ConvolvedFlux")
+
+        # load processCcd config
+        from lsst.utils import getPackageDir
+        configDir = os.path.join(getPackageDir(self.charImage_package), "config")
+        self.load(os.path.join(configDir, "processCcd.py"))
+
+        # we don't perform any calibration
+        self.calibrate.photoCal.applyColorTerms = False
 
         self.charImage.measurePsf.starSelector['objectSize'].fluxMin = \
             fluxMag0 * pow(10.0, -0.4*self.magLim)
+
+        self.doUndeblended(self.charImage, "base_PsfFlux")
+        self.doUndeblended(self.charImage, "ext_photometryKron_KronFlux")
+        # No aperture correction for circular apertures
+        self.doUndeblended(self.charImage, "base_CircularApertureFlux", [])
+        self.doUndeblended(
+            self.charImage, "ext_convolved_ConvolvedFlux",
+            self.charImage.measurement.plugins["ext_convolved_ConvolvedFlux"].getAllResultNames())
+
+        # Disable registration for apCorr of undeblended convolved; apCorr will be done through the deblended proxy
+        self.charImage.measurement.undeblended["ext_convolved_ConvolvedFlux"].registerForApCorr = False
+
+        # no longer used
+        # self.detection.includeThresholdMultiplier = 10.0
+        # self.detection.doFootprintBackground = False
+
+        # self.measurePsf.reserve.fraction = 0.0
+        # self.measurePsf.reserve.fraction = 0.2
+
+    def doUndeblended(self, config, algName, fluxList=None):
+        """Activate undeblended measurements of algorithm
+
+        Parameters
+        ----------
+        algName : `str`
+            Algorithm name.
+        fluxList : `list` of `str`, or `None`
+            List of flux columns to register for aperture correction. If `None`,
+            then this will be the `algName` appended with `_flux`.
+
+        taken from [...]/obs_subaru/6.6.1-hsc+1/config/processCcd.py
+
+        """
+
+        if algName not in config.measurement.plugins:
+            return
+        if fluxList is None:
+            fluxList = [algName + "_flux"]
+        config.measurement.undeblended.names.add(algName)
+        config.measurement.undeblended[algName] = config.measurement.plugins[algName]
+        for flux in fluxList:
+            config.applyApCorr.proxies["undeblended_" + flux] = flux
+
+
 
 
 class EmulateHscCoaddTask(CoaddBaseTask):
@@ -162,24 +232,27 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         self.schema = afwTable.SourceTable.makeMinimalSchema()
         self.algMetadata = dafBase.PropertyList()
 
-        self.makeSubtask("detection", schema=self.schema)
-        self.makeSubtask(
-            "measurement", schema=self.schema, algMetadata=self.algMetadata)
-        self.makeSubtask("measurePsf", schema=self.schema)
         self.makeSubtask("charImage")
 
+        # we don't perform any calibration
+        #self.makeSubtask("calibrate")
 
         if self.config.doMaskBrightObjects:
             mask = afwImage.Mask()
             try:
-                self.brightObjectBitmask = 1 << mask.addMaskPlane(self.config.brightObjectMaskName)
+                self.brightObjectBitmask = 1 << mask.addMaskPlane(
+                    self.config.brightObjectMaskName)
             except pexExceptions.LsstCppException:
                 raise RuntimeError(
                     "Unable to define mask plane for bright objects; \
                     planes used are %s" % mask.getMaskPlaneDict().keys())
             del mask
 
-
+        # no longer used
+        #self.makeSubtask("detection", schema=self.schema)
+        #self.makeSubtask(
+        #    "measurement", schema=self.schema, algMetadata=self.algMetadata)
+        # self.makeSubtask("measurePsf", schema=self.schema)
 
 
     def run(self, patchRef, selectDataList=[]):
@@ -313,6 +386,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         results = self.charImage.characterize(exposure)
         exposure = results.exposure
 
+        """
         if False:
             self.log.info("Measuring PSF")
 
@@ -348,6 +422,8 @@ class EmulateHscCoaddTask(CoaddBaseTask):
             # set PSF
             exposure.setPsf(psf)
 
+        """
+
         # ---------------------------------------------- #
         # write exposure
         # ---------------------------------------------- #
@@ -374,6 +450,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
 
         return imgInName, mskInName, varInName
 
+
     def installInitialPsf(self, exposure):
         """[Method taken from lsst.pipe.tasks.calibrate]
 
@@ -393,6 +470,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
         self.log.info("installInitialPsf fwhm=%.2f pixels; size=%d pixels" % (fwhm, size))
         psf = cls(size, size, fwhm/(2*math.sqrt(2*math.log(2))))
         exposure.setPsf(psf)
+
 
     def readBrightObjectMasks(self, dataRef):
         """Returns None on failure
@@ -472,6 +550,8 @@ class EmulateHscCoaddTask(CoaddBaseTask):
                 self.log.warn("Unexpected region type %s at %s" % rec["type"], center)
                 continue
             spans.clippedTo(mask.getBBox()).setMask(mask, self.brightObjectBitmask)
+
+
 
 
 
