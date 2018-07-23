@@ -39,8 +39,6 @@ And finally, when running `multiBandDriver.py`, the corresponding config file mu
 ```shell
 multiBandDriver.py $ROOTDIR --rerun=emulate_test:emulate_test \
 	--id tract=$TRACT patch=$PATCH filter=$FILTER  \
-	--clobber-config --no-versions \
-	--nodes 1 --procs 1 --do-exec \
 	-C $IMPORTEXTDATA/config/multiBandDriver[_debug].py
 
 ```
