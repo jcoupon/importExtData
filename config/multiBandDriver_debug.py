@@ -1,7 +1,3 @@
-# import os
-# import sys
-
-# sys.path.insert(0, "./python")
 from hsc.importExtData import mergeFewer
 
 config.mergeCoaddDetections.retarget(mergeFewer.FewerMergeDetectionsTask)
