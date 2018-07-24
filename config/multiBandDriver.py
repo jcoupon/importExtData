@@ -25,8 +25,7 @@ config.mergeCoaddMeasurements.priorityList=[
 # config.measureCoaddSources.deblend.maskPlanes += ['BRIGHT_OBJECT']
 # config.measureCoaddSources.deblend.maskLimits["BRIGHT_OBJECT"] = 0.05
 
-# config.measureCoaddSources.deblend.maxFootprintArea=10000
 # config.measureCoaddSources.deblend.maskPlanes += ['BRIGHT_OBJECT']
 
-config.measureCoaddSources.deblend.
+config.measureCoaddSources.deblend.maxFootprintArea=10000
 config.measureCoaddSources.deblend.maskLimits["BRIGHT_OBJECT"] = 0.20
