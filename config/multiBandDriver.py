@@ -22,4 +22,11 @@ config.mergeCoaddMeasurements.priorityList=[
     "NB0921", "NB0816", "NB1010", "NB0387", "NB0515",
     ]
 
+# config.measureCoaddSources.deblend.maskPlanes += ['BRIGHT_OBJECT']
+# config.measureCoaddSources.deblend.maskLimits["BRIGHT_OBJECT"] = 0.05
+
+# config.measureCoaddSources.deblend.maxFootprintArea=10000
+# config.measureCoaddSources.deblend.maskPlanes += ['BRIGHT_OBJECT']
+
 config.measureCoaddSources.deblend.maxFootprintArea=100000
+config.measureCoaddSources.deblend.maskLimits["BRIGHT_OBJECT"] = 0.20
