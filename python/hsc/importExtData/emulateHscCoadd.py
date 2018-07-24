@@ -322,7 +322,7 @@ class EmulateHscCoaddTask(CoaddBaseTask):
             # set NO_DATA bit to mask
             # where noDataIn
             mask_labels = mskIn.getMaskPlaneDict()
-            self.log.info("Mask labels:".format(mask_labels))
+            self.log.info("Mask labels: {}".format(mask_labels))
             noDataBit = mask_labels["NO_DATA"]
 
             # check if not already set in ref mask
