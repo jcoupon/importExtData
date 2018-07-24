@@ -37,7 +37,7 @@ detectCoaddSources.py $ROOTDIR --rerun=$DIR_RERUN:$DIR_RERUN
 And finally, when running `multiBandDriver.py`, the corresponding config file must be loaded:
 
 ```shell
-multiBandDriver.py $ROOTDIR --rerun=emulate_test:emulate_test \
+multiBandDriver.py $ROOTDIR --rerun=$DIR_RERUN:$DIR_RERUN \
 	--id tract=$TRACT patch=$PATCH filter=$FILTER  \
 	-C $IMPORTEXTDATA/config/multiBandDriver[_debug].py
 ```
@@ -58,13 +58,13 @@ for f in [ ..., 'MegaCam-uS']:
 
 #### Filter mapping
 
-The filter mapping helps to match the sources to the reference sources involved in the (astormetric and photometric) calibration. Note that if no re-calibration is run during the `emulateHscCoadd` phase, alternatively, `  --config measureCoaddSources.doMatchSources=False` can probably be set during the multiband process (not tested).
+The filter mapping helps to match the sources to the reference sources involved in the (astrometric and photometric) calibration. Note that if no re-calibration is run during the `emulateHscCoadd` phase, alternatively, `  --config measureCoaddSources.doMatchSources=False` can probably be set during the multiband process (not tested).
 
 Create a new directory in `config` with the name of the camera and add the filter mapping to the reference objects:
 
 ```shell
 mkdir config/MegaCam
-touch config/MegaCam/filterMap.py 
+touch config/MegaCam/filterMap.py
 ```
 
 And edit `config/MegaCam/filterMap.py`:
@@ -164,7 +164,7 @@ optional arguments:
                         other forms of parallel execution)
   --no-backup-config    Don't copy config to file~N backup.
   --clobber-versions    backup and then overwrite existing package versions
-                        instead of checkingthem (safe with -j, but not all
+                        instead of checking them (safe with -j, but not all
                         other forms of parallel execution)
   --no-versions         don't check package versions; useful for development
   --id [KEY=VALUE1[^VALUE2[^VALUE3...] [KEY=VALUE1[^VALUE2[^VALUE3...] ...]]
